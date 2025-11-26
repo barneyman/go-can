@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"os/exec"
 	"time"
 
 	"github.com/go-daq/canbus"
@@ -10,15 +9,20 @@ import (
 )
 
 func main() {
-	// sock, err := canbus.New()
 
-	// if err != nil {
-	// 	log.Fatal(err.Error())
-	// }
+	canbus_exit := make(chan string)
 
-	// go can_dump(sock)
+	sock, err := canbus.New()
 
-	err := rpio.Open()
+	if err != nil {
+		log.Print(err.Error())
+	}
+
+	defer sock.Close()
+
+	go can_dump(sock, canbus_exit)
+
+	err = rpio.Open()
 
 	if err != nil {
 		log.Fatal(err.Error())
@@ -28,7 +32,7 @@ func main() {
 
 	ignitionPin := rpio.Pin(12)
 	latchPin := rpio.Pin(25)
-	lowTime := time.Second * 10
+	lowTime := time.Second * 5
 	var ignitionCounter time.Duration = 0
 
 	ignitionPin.Mode(rpio.Input)
@@ -44,7 +48,14 @@ func main() {
 			if time.Second*ignitionCounter > lowTime {
 
 				log.Print("shutdown!")
-				shutdown()
+
+				canbus_exit <- "exit"
+
+				time.Sleep(time.Second)
+
+				log.Print("shutdown!")
+				//shutdown()
+				return
 			}
 
 			log.Print("sleeping ...")
@@ -56,36 +67,56 @@ func main() {
 	}
 }
 
-func shutdown() {
+// func shutdown() {
 
-	cmd := exec.Command("sudo", "shutdown", "-h", "now")
+// 	cmd := exec.Command("sudo", "shutdown", "-h", "now")
 
-	// Run the command and capture any errors.
-	err := cmd.Run()
-	if err != nil {
-		log.Fatalf("Failed to execute shutdown command: %v", err)
-	}
+// 	// Run the command and capture any errors.
+// 	err := cmd.Run()
+// 	if err != nil {
+// 		log.Fatalf("Failed to execute shutdown command: %v", err)
+// 	}
 
-}
+// }
 
-func can_dump(sock *canbus.Socket) {
+func can_dump(sock *canbus.Socket, exit chan string) {
 
-	log.Print("bail")
-	return
+	if sock != nil {
 
-	err := sock.Bind("can0")
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-
-	for {
-		msg, err := sock.Recv()
-
+		err := sock.Bind("can0")
 		if err != nil {
 			log.Fatal(err.Error())
 		}
-
-		log.Print(msg)
 	}
 
+	readChan := make(chan canbus.Frame)
+
+	go func() {
+
+		for {
+			if sock != nil {
+				msg, err := sock.Recv()
+
+				if err != nil {
+					log.Print(err.Error())
+
+				} else {
+					readChan <- msg
+				}
+			}
+		}
+	}()
+
+	log.Print("looping")
+
+	for {
+		select {
+		case <-exit:
+			log.Print("can_dump ending")
+		// case <-readChan:
+		// 	log.Print("readchan")
+		default:
+			log.Print(".")
+		}
+	}
 }
