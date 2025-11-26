@@ -24,9 +24,11 @@
 	},
 
 	"runArgs": [
+		// needed for canbus
 		"--network","host",
-		"--privileged",
-		"--device", "/dev/gpiomem"
+
+		"--device","/dev/gpiomem",
+		"--device","/dev/mem",
 	],
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
@@ -39,8 +41,7 @@
 	// "customizations": {},
 
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
-	//"remoteUser": "root"
-	"remoteUser": "${localEnv:USER}"
+	"remoteUser": "root"
 
 
 }
