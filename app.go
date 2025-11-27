@@ -1,26 +1,34 @@
 package main
 
 import (
+	"bytes"
+	"encoding/gob"
+	cambusnative "go-can/canbusnative"
 	"log"
+	"os"
 	"time"
 
 	"github.com/go-daq/canbus"
 	"github.com/stianeikeland/go-rpio"
 )
 
+func init() {
+	gob.Register(canbus.Frame{})
+}
+
 func main() {
 
 	canbus_exit := make(chan string)
 
-	sock, err := canbus.New()
+	canbus, err := cambusnative.New()
 
 	if err != nil {
 		log.Print(err.Error())
 	}
 
-	defer sock.Close()
+	defer canbus.Close()
 
-	go can_dump(sock, canbus_exit)
+	go can_dump(canbus, canbus_exit)
 
 	err = rpio.Open()
 
@@ -79,30 +87,65 @@ func main() {
 
 // }
 
-func can_dump(sock *canbus.Socket, exit chan string) {
+func serialiseFrame(frame canbus.Frame) ([]byte, error) {
 
-	if sock != nil {
+	b := bytes.Buffer{}
+	e := gob.NewEncoder(&b)
+	err := e.Encode((frame))
 
-		err := sock.Bind("can0")
-		if err != nil {
-			log.Fatal(err.Error())
-		}
+	return b.Bytes(), err
+
+}
+
+func deserialiseFrame(sframe []byte) (canbus.Frame, error) {
+
+	m := canbus.Frame{}
+	d := gob.NewDecoder(bytes.NewReader(sframe))
+
+	err := d.Decode(&m)
+
+	return m, err
+
+}
+
+func can_dump(canbusSrc cambusnative.CanbusnativeData, exit chan string) {
+
+	// test
+	frame := canbus.Frame{ID: 1, Data: []byte("HACK"), Kind: canbus.EFF}
+
+	sFrame, _ := serialiseFrame(frame)
+
+	rFrame, _ := deserialiseFrame(sFrame)
+
+	log.Print(rFrame)
+
+	log.Print(string(sFrame))
+
+	err := canbusSrc.Bind("can0")
+
+	if err != nil {
+		log.Fatal(err.Error())
 	}
+
+	cb, err := os.Create("/tmp/wibble.canbus")
+
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	defer cb.Close()
 
 	readChan := make(chan canbus.Frame)
 
 	go func() {
 
 		for {
-			if sock != nil {
-				msg, err := sock.Recv()
+			msg, err := canbusSrc.Recv()
+			if err != nil {
+				log.Print(err.Error())
 
-				if err != nil {
-					log.Print(err.Error())
-
-				} else {
-					readChan <- msg
-				}
+			} else {
+				readChan <- msg
 			}
 		}
 	}()
@@ -113,10 +156,12 @@ func can_dump(sock *canbus.Socket, exit chan string) {
 		select {
 		case <-exit:
 			log.Print("can_dump ending")
-		// case <-readChan:
-		// 	log.Print("readchan")
-		default:
-			log.Print(".")
+		case read := <-readChan:
+			b, err := serialiseFrame(read)
+			if err == nil {
+				log.Print(b)
+				cb.Write(b)
+			}
 		}
 	}
 }
