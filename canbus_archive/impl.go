@@ -1,12 +1,19 @@
-package cambus_archive
+package canbus_archive
 
 import (
 	"encoding/gob"
+	"errors"
 	"os"
+	"time"
 
 	"github.com/go-daq/canbus"
+
+	"go-can/canbus_archiver"
 )
 
+type TimeStampedFrame = canbus_archiver.TimeStampedFrame
+
+// archive reader
 type Canbusnativearchive_Data struct {
 	handle  *os.File
 	decoder *gob.Decoder
@@ -34,10 +41,18 @@ func (cs *Canbusnativearchive_Data) Close() {
 
 func (cs *Canbusnativearchive_Data) Recv() (canbus.Frame, error) {
 
-	msg := canbus.Frame{}
+	tsf := TimeStampedFrame{}
 
-	err := cs.decoder.Decode(&msg)
+	err := cs.decoder.Decode(&tsf)
 
-	return msg, err
+	time.Sleep(tsf.Offset)
+
+	return tsf.Frame, err
+
+}
+
+func (cs *Canbusnativearchive_Data) Send(msg canbus.Frame) error {
+
+	return errors.New("not implemented")
 
 }

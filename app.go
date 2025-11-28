@@ -3,9 +3,12 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
-	cambusnative "go-can/canbusnative"
+	"errors"
+	"go-can/canbus_archive"
+	"go-can/canbus_archiver"
+	"go-can/canbus_null"
+	"io"
 	"log"
-	"os"
 	"time"
 
 	"github.com/go-daq/canbus"
@@ -14,21 +17,38 @@ import (
 
 func init() {
 	gob.Register(canbus.Frame{})
+	gob.Register(canbus_archiver.TimeStampedFrame{})
+
+}
+
+type canbusHandler interface {
+	Bind(string) error
+	Close()
+	Recv() (canbus.Frame, error)
+	Send(canbus.Frame) error
 }
 
 func main() {
 
 	canbus_exit := make(chan string)
 
-	canbus, err := cambusnative.New()
-
+	//canbussrc, err := canbus_test.New()
+	canbussrc, err := canbus_archive.New()
 	if err != nil {
 		log.Print(err.Error())
 	}
 
-	defer canbus.Close()
+	canbusdst, err := canbus_null.New()
+	//canbusdst, err := canbus_archiver.New()
+	if err != nil {
+		log.Print(err.Error())
+	}
 
-	go can_dump(canbus, canbus_exit)
+	defer canbussrc.Close()
+	defer canbusdst.Close()
+
+	// & becuase Recv receives a pointer
+	go can_dump(&canbussrc, &canbusdst, canbus_exit)
 
 	err = rpio.Open()
 
@@ -108,32 +128,30 @@ func deserialiseFrame(sframe []byte) (canbus.Frame, error) {
 
 }
 
-func can_dump(canbusSrc cambusnative.CanbusnativeData, exit chan string) {
+func can_dump(canbusSrc, canbusDst canbusHandler, exit chan string) {
 
-	// test
-	frame := canbus.Frame{ID: 1, Data: []byte("HACK"), Kind: canbus.EFF}
+	// // test
+	// frame := canbus.Frame{ID: 1, Data: []byte("HACK"), Kind: canbus.EFF}
 
-	sFrame, _ := serialiseFrame(frame)
+	// sFrame, _ := serialiseFrame(frame)
 
-	rFrame, _ := deserialiseFrame(sFrame)
+	// rFrame, _ := deserialiseFrame(sFrame)
 
-	log.Print(rFrame)
+	// log.Print(rFrame)
 
-	log.Print(string(sFrame))
+	// log.Print(string(sFrame))
 
-	err := canbusSrc.Bind("can0")
-
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-
-	cb, err := os.Create("/tmp/wibble.canbus")
+	//	err := canbusSrc.Bind("can0")
+	err := canbusSrc.Bind("/tmp/canbus")
 
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
-	defer cb.Close()
+	err = canbusDst.Bind("/tmp/canbus")
+	if err != nil {
+		log.Fatal(err.Error())
+	}
 
 	readChan := make(chan canbus.Frame)
 
@@ -142,6 +160,9 @@ func can_dump(canbusSrc cambusnative.CanbusnativeData, exit chan string) {
 		for {
 			msg, err := canbusSrc.Recv()
 			if err != nil {
+				if errors.Is(err, io.EOF) {
+					return
+				}
 				log.Print(err.Error())
 
 			} else {
@@ -156,11 +177,11 @@ func can_dump(canbusSrc cambusnative.CanbusnativeData, exit chan string) {
 		select {
 		case <-exit:
 			log.Print("can_dump ending")
-		case read := <-readChan:
-			b, err := serialiseFrame(read)
+		case msg := <-readChan:
+			canbusDst.Send(msg)
 			if err == nil {
+				b, _ := serialiseFrame(msg)
 				log.Print(b)
-				cb.Write(b)
 			}
 		}
 	}

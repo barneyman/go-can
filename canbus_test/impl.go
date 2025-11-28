@@ -1,7 +1,8 @@
-package cambus_test
+package canbus_test
 
 import (
-	"errors"
+	"math/rand"
+	"time"
 
 	"github.com/go-daq/canbus"
 )
@@ -28,9 +29,28 @@ func (cs Canbusnativetest_Data) Close() {
 
 func (cs *Canbusnativetest_Data) Recv() (canbus.Frame, error) {
 
-	frame := canbus.Frame{ID: cs.id, Data: []byte("HACK"), Kind: canbus.EFF}
+	// random buffer
+	length := rand.Intn(32) + 12
+	randomBytes := make([]byte, length)
+	_, err := rand.Read(randomBytes)
+
+	// wait a random amount
+	millis := rand.Intn(5) + 2
+	time.Sleep(time.Duration(millis) * time.Second)
+
+	if err != nil {
+		return canbus.Frame{}, err
+	}
+
+	frame := canbus.Frame{ID: cs.id, Data: randomBytes, Kind: canbus.EFF}
 	cs.id = cs.id + 1
 
-	return frame, errors.New("cannot recv")
+	return frame, nil
+
+}
+
+func (cs *Canbusnativetest_Data) Send(msg canbus.Frame) error {
+
+	return nil
 
 }

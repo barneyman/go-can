@@ -31,6 +31,21 @@
 		"--device","/dev/mem",
 	],
 
+    "mounts": [
+        {
+            // so we can push from the devcontainer
+            "source":"${localEnv:HOME}/.ssh",
+            "target":"${localEnv:HOME}/.ssh",
+            "type":"bind"
+        },
+        {
+            "source":"${localEnv:HOME}/.gitconfig",
+            "target":"${localEnv:HOME}/.gitconfig",
+            "type":"bind"
+        }
+    ],
+
+
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
 

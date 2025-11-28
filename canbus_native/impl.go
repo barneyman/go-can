@@ -6,6 +6,8 @@ import (
 	"github.com/go-daq/canbus"
 )
 
+//////////////////////////////////////////////////////////////////////////////
+
 type CanbusnativeData struct {
 	sock *canbus.Socket
 }
@@ -39,5 +41,11 @@ func (cs CanbusnativeData) Recv() (canbus.Frame, error) {
 	}
 
 	return canbus.Frame{}, errors.New("cannot recv")
+
+}
+
+func (cs *CanbusnativeData) Send(msg canbus.Frame) error {
+
+	return errors.New("not implemented")
 
 }
