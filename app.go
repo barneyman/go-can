@@ -98,8 +98,9 @@ func handlePower(canbus_exit chan string) error {
 
 	}()
 
-	timeBeforeShutdown := 30
-	timeBeforeQuery := timeBeforeShutdown / 2
+	timeBeforeShutdown := 5
+	timeBeforeQuery := timeBeforeShutdown
+
 	for {
 
 		// create stopped, benign timers
@@ -147,14 +148,13 @@ func handlePower(canbus_exit chan string) error {
 
 				log.Print("proceeding to system shutdown request")
 				// proceed to shutdown
-				//shutdown()
 				return nil
 
 			case <-redissub.Channel():
 				// redis has sent a message
 				log.Print("shutdown deferred")
-
 				shutdownTimer.Stop()
+				log.Print("shutdown timer reset")
 				queryTimer.Reset(time.Second * time.Duration(timeBeforeQuery))
 			}
 
@@ -167,20 +167,15 @@ func main() {
 
 	canbus_exit := make(chan string)
 
-	//canbussrc, err := canbus_test.New()
-	//canbussrc, err := canbus_archive.New()
 	canbussrc, err := canbus_native.New()
 	if err != nil {
 		log.Print(err.Error())
 	}
 
-	//canbusdst, err := canbus_null.New()
 	canbusdst, err := canbus_archiver.New()
 	if err != nil {
 		log.Print(err.Error())
 	}
-	// defer canbussrc.Close()
-	// defer canbusdst.Close()
 
 	// & because Recv receives a pointer
 	go can_dump(&canbussrc, &canbusdst, canbus_exit)
@@ -194,6 +189,9 @@ func main() {
 		log.Fatal(err.Error())
 
 	}
+
+	// otherwise shutdown
+	//shutdown()
 
 }
 
