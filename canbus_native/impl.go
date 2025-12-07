@@ -1,4 +1,4 @@
-package cambusnative
+package canbus_native
 
 import (
 	"errors"

@@ -2,16 +2,20 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/gob"
+	"encoding/json"
 	"errors"
-	"go-can/canbus_archive"
 	"go-can/canbus_archiver"
-	"go-can/canbus_null"
+	"go-can/canbus_native"
 	"io"
 	"log"
+	"os/exec"
 	"time"
 
 	"github.com/go-daq/canbus"
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"github.com/stianeikeland/go-rpio"
 )
 
@@ -28,84 +32,182 @@ type canbusHandler interface {
 	Send(canbus.Frame) error
 }
 
-func main() {
+type shutdownRequest struct {
+	Mandatory bool // think - battery voltage too low, you MUST exit
+	Seconds   int  // how many seconds until i shutdown
+}
 
-	canbus_exit := make(chan string)
+func handlePower(canbus_exit chan string) error {
 
-	//canbussrc, err := canbus_test.New()
-	canbussrc, err := canbus_archive.New()
-	if err != nil {
-		log.Print(err.Error())
-	}
-
-	canbusdst, err := canbus_null.New()
-	//canbusdst, err := canbus_archiver.New()
-	if err != nil {
-		log.Print(err.Error())
-	}
-
-	defer canbussrc.Close()
-	defer canbusdst.Close()
-
-	// & becuase Recv receives a pointer
-	go can_dump(&canbussrc, &canbusdst, canbus_exit)
-
-	err = rpio.Open()
+	err := rpio.Open()
 
 	if err != nil {
-		log.Fatal(err.Error())
+		return err
 	}
 
 	defer rpio.Close()
 
+	ctx := context.Background()
+
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
+
+	_, err = rdb.Ping(ctx).Result()
+	if err != nil {
+		return err
+	}
+
+	defer rdb.Close()
+
+	redissub := rdb.Subscribe(ctx, "shutdown_deny")
+
+	defer redissub.Close()
+
 	ignitionPin := rpio.Pin(12)
 	latchPin := rpio.Pin(25)
-	lowTime := time.Second * 5
-	var ignitionCounter time.Duration = 0
 
 	ignitionPin.Mode(rpio.Input)
 	latchPin.Mode(rpio.Output)
 
 	latchPin.High()
 
-	for {
-		if ignitionPin.Read() != rpio.High {
-			time.Sleep(time.Second)
-			ignitionCounter++
+	ignChan := make(chan rpio.State)
 
-			if time.Second*ignitionCounter > lowTime {
+	timeBetweenIGNchecks := time.Second
 
-				log.Print("shutdown!")
+	go func() {
 
-				canbus_exit <- "exit"
+		previousIgnState := rpio.High
 
-				time.Sleep(time.Second)
+		for {
+			ignState := ignitionPin.Read()
 
-				log.Print("shutdown!")
-				//shutdown()
-				return
+			if previousIgnState != ignState {
+				log.Printf("ign switched from %v to %v", previousIgnState, ignState)
+				previousIgnState = ignState
+				// send it on
+				ignChan <- ignState
 			}
 
-			log.Print("sleeping ...")
-
-		} else {
-			ignitionCounter = 0
+			time.Sleep(timeBetweenIGNchecks)
 
 		}
+
+	}()
+
+	timeBeforeShutdown := 30
+	timeBeforeQuery := timeBeforeShutdown / 2
+	for {
+
+		// create stopped, benign timers
+		queryTimer := time.NewTimer(time.Minute)
+		queryTimer.Stop()
+
+		shutdownTimer := time.NewTimer(time.Minute)
+		shutdownTimer.Stop()
+
+		for {
+			select {
+			case ignState := <-ignChan:
+				if ignState == rpio.Low {
+					// ign off, ask everybody if it's ok to shutdown in queryTimer time
+					log.Print("Ign turned off, starting query timer")
+					queryTimer.Reset(time.Second * time.Duration(timeBeforeQuery))
+				} else {
+					log.Print("Ign turned on, killing all timers")
+					// we're back on, cancel all timers
+					queryTimer.Stop()
+					shutdownTimer.Stop()
+				}
+
+			case <-queryTimer.C:
+				// craft the request
+				sdr := shutdownRequest{Mandatory: false, Seconds: timeBeforeShutdown}
+				jsonData, _ := json.Marshal(sdr)
+				log.Print("Requesting permission to shutdown ...")
+				err = rdb.Publish(ctx, "shutdown", string(jsonData)).Err()
+				if err != nil {
+					log.Print(err)
+				}
+
+				// restart the timer - if i don't hear from anyone ....
+				log.Print("waiting for any responses ...")
+				shutdownTimer.Reset(time.Second * time.Duration(timeBeforeShutdown))
+
+			case <-shutdownTimer.C:
+
+				log.Print("Shutdown timer expired, stopping canbus")
+
+				// tell can to bail gracefully
+				canbus_exit <- "canbus-end"
+				time.Sleep(time.Second)
+
+				log.Print("proceeding to system shutdown request")
+				// proceed to shutdown
+				//shutdown()
+				return nil
+
+			case <-redissub.Channel():
+				// redis has sent a message
+				log.Print("shutdown deferred")
+
+				shutdownTimer.Stop()
+				queryTimer.Reset(time.Second * time.Duration(timeBeforeQuery))
+			}
+
+		}
+
 	}
 }
 
-// func shutdown() {
+func main() {
 
-// 	cmd := exec.Command("sudo", "shutdown", "-h", "now")
+	canbus_exit := make(chan string)
 
-// 	// Run the command and capture any errors.
-// 	err := cmd.Run()
-// 	if err != nil {
-// 		log.Fatalf("Failed to execute shutdown command: %v", err)
-// 	}
+	//canbussrc, err := canbus_test.New()
+	//canbussrc, err := canbus_archive.New()
+	canbussrc, err := canbus_native.New()
+	if err != nil {
+		log.Print(err.Error())
+	}
 
-// }
+	//canbusdst, err := canbus_null.New()
+	canbusdst, err := canbus_archiver.New()
+	if err != nil {
+		log.Print(err.Error())
+	}
+	// defer canbussrc.Close()
+	// defer canbusdst.Close()
+
+	// & because Recv receives a pointer
+	go can_dump(&canbussrc, &canbusdst, canbus_exit)
+
+	// look after the power
+	err = handlePower(canbus_exit)
+
+	log.Print("main exiting")
+
+	if err != nil {
+		log.Fatal(err.Error())
+
+	}
+
+}
+
+func shutdown() {
+
+	cmd := exec.Command("sudo", "shutdown", "-h", "now")
+
+	// Run the command and capture any errors.
+	err := cmd.Run()
+	if err != nil {
+		log.Fatalf("Failed to execute shutdown command: %v", err)
+	}
+
+}
 
 func serialiseFrame(frame canbus.Frame) ([]byte, error) {
 
@@ -117,38 +219,34 @@ func serialiseFrame(frame canbus.Frame) ([]byte, error) {
 
 }
 
-func deserialiseFrame(sframe []byte) (canbus.Frame, error) {
+// func deserialiseFrame(sframe []byte) (canbus.Frame, error) {
 
-	m := canbus.Frame{}
-	d := gob.NewDecoder(bytes.NewReader(sframe))
+// 	m := canbus.Frame{}
+// 	d := gob.NewDecoder(bytes.NewReader(sframe))
 
-	err := d.Decode(&m)
+// 	err := d.Decode(&m)
 
-	return m, err
+// 	return m, err
 
-}
+// }
 
 func can_dump(canbusSrc, canbusDst canbusHandler, exit chan string) {
 
-	// // test
-	// frame := canbus.Frame{ID: 1, Data: []byte("HACK"), Kind: canbus.EFF}
+	// vital thse are closed sanely
+	defer canbusSrc.Close()
+	defer canbusDst.Close()
 
-	// sFrame, _ := serialiseFrame(frame)
-
-	// rFrame, _ := deserialiseFrame(sFrame)
-
-	// log.Print(rFrame)
-
-	// log.Print(string(sFrame))
-
-	//	err := canbusSrc.Bind("can0")
-	err := canbusSrc.Bind("/tmp/canbus")
+	err := canbusSrc.Bind("can0")
+	//err := canbusSrc.Bind("/var/canbus")
 
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
-	err = canbusDst.Bind("/tmp/canbus")
+	newuuid := uuid.New()
+	filename := "/var/canbus/" + newuuid.String() + ".can"
+
+	err = canbusDst.Bind(filename)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -160,10 +258,10 @@ func can_dump(canbusSrc, canbusDst canbusHandler, exit chan string) {
 		for {
 			msg, err := canbusSrc.Recv()
 			if err != nil {
+				log.Print(err.Error())
 				if errors.Is(err, io.EOF) {
 					return
 				}
-				log.Print(err.Error())
 
 			} else {
 				readChan <- msg
@@ -171,12 +269,12 @@ func can_dump(canbusSrc, canbusDst canbusHandler, exit chan string) {
 		}
 	}()
 
-	log.Print("looping")
+	log.Print("canbus main loop")
 
 	for {
 		select {
 		case <-exit:
-			log.Print("can_dump ending")
+			log.Print("can_dump exiting")
 		case msg := <-readChan:
 			canbusDst.Send(msg)
 			if err == nil {
@@ -185,4 +283,5 @@ func can_dump(canbusSrc, canbusDst canbusHandler, exit chan string) {
 			}
 		}
 	}
+
 }

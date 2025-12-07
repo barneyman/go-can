@@ -28,7 +28,7 @@
 		"--network","host",
 
 		"--device","/dev/gpiomem",
-		"--device","/dev/mem",
+		"--device","/dev/mem"
 	],
 
     "mounts": [
@@ -42,7 +42,12 @@
             "source":"${localEnv:HOME}/.gitconfig",
             "target":"${localEnv:HOME}/.gitconfig",
             "type":"bind"
-        }
+        },
+		{
+			"source": "/var/canbus",
+			"target": "/var/canbus",
+			"type": "bind"
+		}
     ],
 
 
@@ -56,7 +61,19 @@
 	// "customizations": {},
 
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
-	"remoteUser": "root"
+	"remoteUser": "root",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-azuretools.vscode-containers",
+				"dbaeumer.vscode-eslint",
+				"mhutchie.git-graph",
+				"golang.go",
+				"ms-vscode.hexeditor",
+				"redhat.vscode-yaml"
+			]
+		}
+	}
 
 
 }
