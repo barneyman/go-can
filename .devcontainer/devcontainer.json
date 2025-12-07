@@ -27,8 +27,9 @@
 		// needed for canbus
 		"--network","host",
 
+		// needs to be in gpio group
 		"--device","/dev/gpiomem",
-		"--device","/dev/mem"
+		//"--device","/dev/mem"
 	],
 
     "mounts": [
