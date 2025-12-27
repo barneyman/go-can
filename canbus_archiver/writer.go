@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-daq/canbus"
+	"github.com/google/uuid"
 )
 
 type Canbusnativearchiver_Data struct {
@@ -26,17 +27,27 @@ func New() (*Canbusnativearchiver_Data, error) {
 
 }
 
+func (cs *Canbusnativearchiver_Data) BindDefault() error {
+
+	newuuid := uuid.New()
+	filename := "./data/" + newuuid.String() + ".can"
+
+	return cs.Bind(filename)
+
+}
+
 func (cs *Canbusnativearchiver_Data) Bind(name string) error {
 
 	handle, err := os.Create(name)
-	cs.handle = handle
+	if err == nil {
+		cs.handle = handle
 
-	cs.encoder = gob.NewEncoder(cs.handle)
+		cs.encoder = gob.NewEncoder(cs.handle)
 
-	// got to watch for time slew underneath me
-	cs.startAt = time.Now()
-	cs.lastSend = time.Now()
-
+		// got to watch for time slew underneath me
+		cs.startAt = time.Now()
+		cs.lastSend = time.Now()
+	}
 	return err
 }
 

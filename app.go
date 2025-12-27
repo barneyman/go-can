@@ -8,13 +8,16 @@ import (
 	"errors"
 	"go-can/canbus_archiver"
 	"go-can/canbus_native"
+	"go-can/canbus_null"
+	"go-can/canbus_test"
 	"io"
 	"log"
+	"os"
 	"os/exec"
+	"strconv"
 	"time"
 
 	"github.com/go-daq/canbus"
-	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/stianeikeland/go-rpio"
 )
@@ -26,6 +29,7 @@ func init() {
 }
 
 type canbusHandler interface {
+	BindDefault() error
 	Bind(string) error
 	Close()
 	Recv() (canbus.Frame, error)
@@ -56,10 +60,12 @@ func handlePower(canbus_exit chan string) error {
 	})
 
 	for retry := 0; retry < 15; retry++ {
-	_, err = rdb.Ping(ctx).Result()
+		_, err = rdb.Ping(ctx).Result()
 		if err != nil {
 			time.Sleep(time.Second * 2)
 			log.Print("Trying to ping redis again")
+		} else {
+			break
 		}
 
 	}
@@ -108,6 +114,16 @@ func handlePower(canbus_exit chan string) error {
 
 	timeBeforeShutdown := 5
 	timeBeforeQuery := timeBeforeShutdown
+
+	// allow us to fake timeouts during test data creation
+	if os.Getenv("SHUTDOWN_IN_SECONDS") != "" {
+		timeBeforeQuery, err = strconv.Atoi(os.Getenv("SHUTDOWN_IN_SECONDS"))
+	}
+
+	// sanity check
+	if timeBeforeQuery == 0 || err != nil {
+		timeBeforeQuery = timeBeforeShutdown
+	}
 
 	for {
 
@@ -267,17 +283,13 @@ func can_dump(canbusSrc, canbusDst canbusHandler, exit chan string) {
 	defer canbusSrc.Close()
 	defer canbusDst.Close()
 
-	err := canbusSrc.Bind("can0")
-	//err := canbusSrc.Bind("/var/canbus")
+	err := canbusSrc.BindDefault()
 
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
-	newuuid := uuid.New()
-	filename := "./data/" + newuuid.String() + ".can"
-
-	err = canbusDst.Bind(filename)
+	err = canbusDst.BindDefault()
 	if err != nil {
 		log.Fatal(err.Error())
 	}

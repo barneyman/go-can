@@ -17,6 +17,11 @@ func New() (*CanbusnullData, error) {
 
 }
 
+func (cs CanbusnullData) BindDefault() error {
+
+	return nil
+}
+
 func (cs CanbusnullData) Bind(name string) error {
 
 	return nil

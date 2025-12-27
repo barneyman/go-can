@@ -4,6 +4,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/go-daq/canbus"
@@ -23,6 +24,44 @@ func New() (Canbusnativearchive_Data, error) {
 
 	return Canbusnativearchive_Data{}, nil
 
+}
+
+func (cs Canbusnativearchive_Data) BindDefault() error {
+
+	// get list of files from data and get the newest one
+
+	files, err := os.ReadDir("./data")
+
+	if err != nil {
+		return err
+	}
+
+	if len(files) == 0 {
+		return errors.New("no archives to use")
+	}
+
+	// Sort the slice of fs.DirEntry by modification time
+	sort.Slice(files, func(i, j int) bool {
+		infoI, errI := files[i].Info()
+		infoJ, errJ := files[j].Info()
+
+		// Basic error handling for getting file info
+		if errI != nil || errJ != nil {
+			// Handle errors as appropriate for your application.
+			// For simplicity in this example, we return false to
+			// maintain a consistent order if info is unavailable.
+			return false
+		}
+
+		// Sort in ascending order (oldest first)
+		//return infoI.ModTime().Before(infoJ.ModTime())
+
+		// To sort in descending order (newest first), use:
+		return infoJ.ModTime().Before(infoI.ModTime())
+
+	})
+
+	return cs.Bind(files[0].Name())
 }
 
 func (cs *Canbusnativearchive_Data) Bind(name string) error {
