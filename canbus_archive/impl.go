@@ -12,25 +12,25 @@ import (
 	"go-can/canbus_archiver"
 )
 
-type TimeStampedFrame = canbus_archiver.TimeStampedFrame
-
 // archive reader
 type Canbusnativearchive_Data struct {
 	handle  *os.File
 	decoder *gob.Decoder
 }
 
-func New() (Canbusnativearchive_Data, error) {
+func New() (*Canbusnativearchive_Data, error) {
 
-	return Canbusnativearchive_Data{}, nil
+	return &Canbusnativearchive_Data{}, nil
 
 }
 
-func (cs Canbusnativearchive_Data) BindDefault() error {
+func (cs *Canbusnativearchive_Data) BindDefault() error {
 
 	// get list of files from data and get the newest one
 
-	files, err := os.ReadDir("./data")
+	sourceDir := "./data"
+
+	files, err := os.ReadDir(sourceDir)
 
 	if err != nil {
 		return err
@@ -61,7 +61,7 @@ func (cs Canbusnativearchive_Data) BindDefault() error {
 
 	})
 
-	return cs.Bind(files[0].Name())
+	return cs.Bind(sourceDir + "/" + files[0].Name())
 }
 
 func (cs *Canbusnativearchive_Data) Bind(name string) error {
@@ -80,7 +80,7 @@ func (cs *Canbusnativearchive_Data) Close() {
 
 func (cs *Canbusnativearchive_Data) Recv() (canbus.Frame, error) {
 
-	tsf := TimeStampedFrame{}
+	tsf := canbus_archiver.TimeStampedFrame{}
 
 	err := cs.decoder.Decode(&tsf)
 

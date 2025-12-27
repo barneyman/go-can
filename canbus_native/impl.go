@@ -21,12 +21,12 @@ func New() (*CanbusnativeData, error) {
 
 }
 
-func (cs CanbusnativeData) BindDefault() error {
+func (cs *CanbusnativeData) BindDefault() error {
 
 	return cs.Bind("cam0")
 }
 
-func (cs CanbusnativeData) Bind(name string) error {
+func (cs *CanbusnativeData) Bind(name string) error {
 
 	if cs.sock == nil {
 		return errors.New("CanbusnativeData sock not valid")

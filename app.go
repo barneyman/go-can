@@ -6,6 +6,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"errors"
+	"go-can/canbus_archive"
 	"go-can/canbus_archiver"
 	"go-can/canbus_native"
 	"go-can/canbus_null"
@@ -202,7 +203,7 @@ func main() {
 	case "native":
 		canbussrc, err = canbus_native.New()
 	case "archive":
-		canbussrc, err = canbus_archiver.New()
+		canbussrc, err = canbus_archive.New()
 	case "test":
 		canbussrc, err = canbus_test.New()
 	default:
