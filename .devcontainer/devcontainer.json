@@ -29,7 +29,10 @@
 
 		// needs to be in gpio group
 		"--device","/dev/gpiomem",
-		"--device","/dev/mem"
+		"--device","/dev/mem",
+
+		// to get /dev/mem back
+		"--privileged"
 	],
 
     "mounts": [
