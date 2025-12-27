@@ -175,18 +175,43 @@ func main() {
 
 	canbus_exit := make(chan string)
 
-	canbussrc, err := canbus_native.New()
+	var canbussrc, canbusdst canbusHandler
+	var err error
+
+	// check what we're being asked for
+	namedSrc := os.Getenv("CANSRC")
+	namedDst := os.Getenv("CANDEST")
+
+	switch namedSrc {
+	case "native":
+		canbussrc, err = canbus_native.New()
+	case "archive":
+		canbussrc, err = canbus_archiver.New()
+	case "test":
+		canbussrc, err = canbus_test.New()
+	default:
+		log.Fatal("no CANSRC requested")
+	}
+
 	if err != nil {
 		log.Print(err.Error())
 	}
 
-	canbusdst, err := canbus_archiver.New()
+	switch namedDst {
+	case "archive":
+		canbusdst, err = canbus_archiver.New()
+	case "null":
+		canbusdst, err = canbus_null.New()
+	default:
+		log.Fatal("no CANDEST requseted")
+	}
+
 	if err != nil {
 		log.Print(err.Error())
 	}
 
 	// & because Recv receives a pointer
-	go can_dump(&canbussrc, &canbusdst, canbus_exit)
+	go can_dump(canbussrc, canbusdst, canbus_exit)
 
 	// look after the power
 	err = handlePower(canbus_exit)

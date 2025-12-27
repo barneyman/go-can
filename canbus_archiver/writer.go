@@ -20,9 +20,9 @@ type TimeStampedFrame struct {
 	Frame  canbus.Frame
 }
 
-func New() (Canbusnativearchiver_Data, error) {
+func New() (*Canbusnativearchiver_Data, error) {
 
-	return Canbusnativearchiver_Data{}, nil
+	return &Canbusnativearchiver_Data{}, nil
 
 }
 

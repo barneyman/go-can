@@ -9,11 +9,11 @@ import (
 type CanbusnullData struct {
 }
 
-func New() (CanbusnullData, error) {
+func New() (*CanbusnullData, error) {
 
 	cs := CanbusnullData{}
 
-	return cs, nil
+	return &cs, nil
 
 }
 

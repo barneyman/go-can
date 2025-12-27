@@ -11,11 +11,11 @@ type Canbusnativetest_Data struct {
 	id uint32
 }
 
-func New() (Canbusnativetest_Data, error) {
+func New() (*Canbusnativetest_Data, error) {
 
 	cs := Canbusnativetest_Data{id: 1}
 
-	return cs, nil
+	return &cs, nil
 
 }
 

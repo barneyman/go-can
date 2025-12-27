@@ -12,12 +12,12 @@ type CanbusnativeData struct {
 	sock *canbus.Socket
 }
 
-func New() (CanbusnativeData, error) {
+func New() (*CanbusnativeData, error) {
 	sock, err := canbus.New()
 
 	cs := CanbusnativeData{sock: sock}
 
-	return cs, err
+	return &cs, err
 
 }
 
