@@ -23,7 +23,7 @@ func New() (*CanbusnativeData, error) {
 
 func (cs *CanbusnativeData) BindDefault() error {
 
-	return cs.Bind("cam0")
+	return cs.Bind("can0")
 }
 
 func (cs *CanbusnativeData) Bind(name string) error {

@@ -320,10 +320,10 @@ func can_dump(canbusSrc, canbusDst canbusHandler, exit chan string) {
 		case <-exit:
 			log.Print("can_dump exiting")
 		case msg := <-readChan:
-			canbusDst.Send(msg)
-			if err == nil {
-				b, _ := serialiseFrame(msg)
-				log.Print(b)
+
+			if canbusDst.Send(msg) == nil {
+				frameBytes, _ := serialiseFrame(msg)
+				log.Print(string(frameBytes))
 			}
 		}
 	}
