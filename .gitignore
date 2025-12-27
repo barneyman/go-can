@@ -1,2 +1,3 @@
 __debug_*
 go-can
+data/*.can

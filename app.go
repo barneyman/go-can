@@ -55,7 +55,15 @@ func handlePower(canbus_exit chan string) error {
 		DB:       0,  // use default DB
 	})
 
+	for retry := 0; retry < 15; retry++ {
 	_, err = rdb.Ping(ctx).Result()
+		if err != nil {
+			time.Sleep(time.Second * 2)
+			log.Print("Trying to ping redis again")
+		}
+
+	}
+
 	if err != nil {
 		return err
 	}
@@ -76,7 +84,7 @@ func handlePower(canbus_exit chan string) error {
 
 	ignChan := make(chan rpio.State)
 
-	timeBetweenIGNchecks := time.Second
+	timeBetweenIGNchecks := time.Millisecond * 250
 
 	go func() {
 
@@ -186,7 +194,7 @@ func main() {
 	log.Print("main exiting")
 
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Print("handlePower error " + err.Error())
 
 	}
 
@@ -242,7 +250,7 @@ func can_dump(canbusSrc, canbusDst canbusHandler, exit chan string) {
 	}
 
 	newuuid := uuid.New()
-	filename := "/var/canbus/" + newuuid.String() + ".can"
+	filename := "./data/" + newuuid.String() + ".can"
 
 	err = canbusDst.Bind(filename)
 	if err != nil {
