@@ -89,7 +89,7 @@ func handlePower(canbus_exit chan string) error {
 
 	latchPin.High()
 
-	ignChan := make(chan rpio.State)
+	ignStateChannel := make(chan rpio.State)
 
 	timeBetweenIGNchecks := time.Millisecond * 250
 
@@ -104,7 +104,7 @@ func handlePower(canbus_exit chan string) error {
 				log.Printf("ign switched from %v to %v", previousIgnState, ignState)
 				previousIgnState = ignState
 				// send it on
-				ignChan <- ignState
+				ignStateChannel <- ignState
 			}
 
 			time.Sleep(timeBetweenIGNchecks)
@@ -137,7 +137,7 @@ func handlePower(canbus_exit chan string) error {
 
 		for {
 			select {
-			case ignState := <-ignChan:
+			case ignState := <-ignStateChannel:
 				if ignState == rpio.Low {
 					// ign off, ask everybody if it's ok to shutdown in queryTimer time
 					log.Print("Ign turned off, starting query timer")
