@@ -31,8 +31,10 @@
 		"--device","/dev/gpiomem",
 		"--device","/dev/mem",
 
-		// to get /dev/mem back
-		"--privileged"
+		// we need to get a permission denied error for the library to fall thru to gpiomem
+		// i have a fork that fixes it but haven't worked out how to point golang at it instead
+		// to get /dev/mem back 
+		// "--privileged"
 	],
 
     "mounts": [
