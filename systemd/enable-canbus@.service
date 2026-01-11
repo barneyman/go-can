@@ -1,0 +1,11 @@
+[Unit]
+Description=Enable canbus network
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/home/pi/source/go-can/systemd/enable_can.sh %i
+WorkingDirectory=/home/pi/source/go-can/systemd/
+
+[Install]
+WantedBy=multi-user.target

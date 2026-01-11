@@ -1,0 +1,16 @@
+[Unit]
+Description=RTC Ignition wire power switcher and canbus listener
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/home/pi/source/go-can/systemd/run_can.sh %i
+#Restart=always
+User=pi
+WorkingDirectory=/home/pi/source/go-can/systemd/
+
+Wants=enable-canbus@%i.service
+After=enable-canbus@%i.service
+
+[Install]
+WantedBy=multi-user.target
