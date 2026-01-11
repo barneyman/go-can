@@ -241,7 +241,9 @@ func main() {
 	}
 
 	// otherwise shutdown
-	//shutdown()
+	if os.Getenv("SHUTDOWN") != "" {
+		shutdown()
+	}
 
 }
 
