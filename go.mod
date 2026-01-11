@@ -3,10 +3,10 @@ module go-can
 go 1.24.9
 
 require (
+	github.com/barneyman/go-rpio/v4 v4.0.0-20260111042052-da51a52f2438
 	github.com/go-daq/canbus v0.2.0
 	github.com/google/uuid v1.6.0
 	github.com/redis/go-redis/v9 v9.17.1
-	github.com/stianeikeland/go-rpio v4.2.0+incompatible
 )
 
 require (

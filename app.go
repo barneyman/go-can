@@ -18,9 +18,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/barneyman/go-rpio/v4"
 	"github.com/go-daq/canbus"
 	"github.com/redis/go-redis/v9"
-	"github.com/stianeikeland/go-rpio"
 )
 
 func init() {
