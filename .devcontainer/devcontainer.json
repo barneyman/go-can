@@ -28,8 +28,8 @@
 		"--network","host",
 
 		// needs to be in gpio group
-		"--device","/dev/gpiomem",
-		"--device","/dev/mem",
+		"--device","/dev/gpiomem"
+		//"--device","/dev/mem",
 
 		// we need to get a permission denied error for the library to fall thru to gpiomem
 		// i have a fork that fixes it but haven't worked out how to point golang at it instead
