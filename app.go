@@ -232,6 +232,9 @@ func main() {
 	// & because Recv receives a pointer
 	go can_dump(canbussrc, canbusdst, canbus_exit)
 
+	for {
+
+	}
 	// look after the power
 	err = handlePower(canbus_exit)
 
@@ -282,6 +285,132 @@ func serialiseFrame(frame canbus.Frame) ([]byte, error) {
 
 // }
 
+type PIDsupported int
+type PIDscanning int
+
+const (
+	UnknownSupport PIDsupported = iota
+	Supported
+	Unsupported
+)
+
+const (
+	NotStarted PIDscanning = iota
+	Ongoing
+	Done
+)
+
+type PIDHandler struct {
+	cbHandler      canbusHandler
+	suppportedPIDs [255]PIDsupported
+	ScanStarted    PIDscanning
+}
+
+type PIDresponse struct {
+	respID  int
+	service int
+	PID     int
+	data    []byte
+}
+
+const PID_RESPONSE_FLAG byte = 0x40
+const OBD2_ID uint = 0x7DF
+
+func (ph *PIDHandler) Parse(resp canbus.Frame) error {
+
+	// check packet integrity
+	pidlen := int(resp.Data[0])
+
+	if len(resp.Data) <= pidlen {
+		return errors.New("wrong size payload")
+	}
+
+	// confirm it's a response
+	if resp.Data[1]&0x40 == 0 {
+		return errors.New("not a response payload")
+	}
+
+	response := PIDresponse{respID: int(resp.ID), service: int(resp.Data[1] &^ PID_RESPONSE_FLAG), PID: int(resp.Data[2]), data: resp.Data[3:]}
+
+	log.Printf("Parsing ID: %x Service %d PID: %x\r", response.respID, response.service, response.PID)
+
+	if response.service != 1 {
+		return errors.New("unsupported service")
+	}
+
+	switch response.PID {
+	// handle supported PIDs
+	case 0, 32, 64, 96, 128, 160, 192:
+		if response.PID == 0 {
+			ph.ScanStarted = Ongoing
+		}
+		// populate the array
+		offset := 1 + (response.PID)
+
+		for _, v := range response.data {
+			for bit := 7; bit >= 0; bit-- {
+				if (v & (1 << bit)) != 0 {
+					ph.suppportedPIDs[offset] = Supported
+				} else {
+					ph.suppportedPIDs[offset] = Unsupported
+				}
+				offset++
+			}
+		}
+
+		if response.PID < 192 {
+			ph.GetSupportedPID(uint(response.PID) + 1)
+		} else {
+			ph.ScanStarted = Done
+		}
+		return nil
+	}
+
+	return nil
+}
+
+func (ph PIDHandler) sendOBD_PID_Current(PID uint, reqData []byte) error {
+
+	return ph.sendPID(OBD2_ID, 1, PID, reqData)
+}
+
+func (ph PIDHandler) sendOBD_PID(Service, PID uint, reqData []byte) error {
+
+	return ph.sendPID(OBD2_ID, Service, PID, reqData)
+}
+
+func (ph PIDHandler) sendPID(ID, Service, PID uint, reqData []byte) error {
+
+	// check
+	if ph.suppportedPIDs[PID] == Unsupported {
+		return errors.New("unsupported pid")
+	}
+
+	frameData := []byte{byte(Service), byte(PID)}
+	frameData = append(frameData, reqData...)
+
+	cf := canbus.Frame{ID: uint32(ID), Data: frameData, Kind: canbus.SFF}
+
+	return ph.cbHandler.Send(cf)
+
+}
+
+func (ph PIDHandler) GetSupportedPID(startAt uint) error {
+
+	log.Printf("GetSupportedPID %d\r", startAt)
+
+	// check startAt
+	if startAt > 7 {
+		return errors.New("PID request too high")
+	}
+
+	return ph.sendOBD_PID_Current(0, []byte{})
+}
+
+func (ph PIDHandler) GetRPM() error {
+	return ph.sendOBD_PID_Current(0xC, []byte{})
+}
+
 func can_dump(canbusSrc, canbusDst canbusHandler, exit chan string) {
 
 	// vital thse are closed sanely
@@ -299,7 +428,24 @@ func can_dump(canbusSrc, canbusDst canbusHandler, exit chan string) {
 		log.Fatal(err.Error())
 	}
 
+	myPIDhandler := PIDHandler{cbHandler: canbusSrc}
+
 	readChan := make(chan canbus.Frame)
+	/*
+		// 2 len data bytes 1 mode 0xd vehicle rpm 5 bytes padding to 8
+		reqData := []byte{2, 1, 0xc, 0, 0, 0, 0, 0}
+
+		// 2 len data bytes 1 mode 0x2f fuel level 5 bytes padding to 8
+		// reqData = []byte{2, 1, 0xd, 0, 0, 0, 0, 0}
+
+		// response is
+		// [src ID 7e8] [len] [mode | 0x40] [pid] [result]
+
+		// RPM
+		request := canbus.Frame{ID: 0x7df, Data: reqData, Kind: canbus.SFF}
+
+		canbusSrc.Send(request)
+	*/
 
 	go func() {
 
@@ -325,10 +471,27 @@ func can_dump(canbusSrc, canbusDst canbusHandler, exit chan string) {
 			log.Print("can_dump exiting")
 		case msg := <-readChan:
 
+			myPIDhandler.Parse(msg)
+
+			// send it to the archiver
 			if canbusDst.Send(msg) == nil {
 				frameBytes, _ := serialiseFrame(msg)
 				log.Print(string(frameBytes))
 			}
+
+		default:
+			if myPIDhandler.ScanStarted == NotStarted {
+				// start the PID check
+				err = myPIDhandler.GetSupportedPID(0)
+
+				if err != nil {
+					log.Print(err.Error())
+				}
+
+			}
+
+			time.Sleep(20 * time.Second)
+
 		}
 	}
 
