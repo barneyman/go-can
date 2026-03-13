@@ -51,6 +51,36 @@ func (cs CanbusnativeData) Recv() (canbus.Frame, error) {
 
 func (cs *CanbusnativeData) Send(msg canbus.Frame) error {
 
-	return errors.New("not implemented")
+	if cs.sock != nil {
+		_, err := cs.sock.Send(msg)
+		return err
+	}
+
+	return errors.New("sock nil")
+
+}
+
+// =====================================================================
+
+type canbusnativeVirtual struct {
+	CanbusnativeData
+}
+
+func (cs *canbusnativeVirtual) BindDefault() error {
+
+	return cs.Bind("vcan0")
+}
+
+func NewVirtual() (*canbusnativeVirtual, error) {
+
+	cs, err := New()
+
+	if err != nil {
+		return nil, err
+	}
+
+	csv := canbusnativeVirtual{CanbusnativeData{sock: cs.sock}}
+
+	return &csv, err
 
 }

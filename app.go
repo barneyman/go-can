@@ -206,6 +206,8 @@ func main() {
 		canbussrc, err = canbus_archive.New()
 	case "test":
 		canbussrc, err = canbus_test.New()
+	case "vcan":
+		canbussrc, err = canbus_native.NewVirtual()
 	default:
 		log.Fatal("no CANSRC requested")
 	}
