@@ -24,6 +24,10 @@ func (cs Canbusnativetest_Data) BindDefault() error {
 	return nil
 }
 
+func (cs *Canbusnativetest_Data) SetListenOnly(listenOnly bool) {
+	// do nothing, this is a test archive
+}
+
 func (cs Canbusnativetest_Data) Bind(name string) error {
 
 	return nil

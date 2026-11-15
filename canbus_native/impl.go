@@ -9,13 +9,14 @@ import (
 //////////////////////////////////////////////////////////////////////////////
 
 type CanbusnativeData struct {
-	sock *canbus.Socket
+	sock       *canbus.Socket
+	listenOnly bool
 }
 
 func New() (*CanbusnativeData, error) {
 	sock, err := canbus.New()
 
-	cs := CanbusnativeData{sock: sock}
+	cs := CanbusnativeData{sock: sock, listenOnly: false}
 
 	return &cs, err
 
@@ -24,6 +25,11 @@ func New() (*CanbusnativeData, error) {
 func (cs *CanbusnativeData) BindDefault() error {
 
 	return cs.Bind("can0")
+}
+
+func (cs *CanbusnativeData) SetListenOnly(listenOnly bool) {
+	cs.listenOnly = listenOnly
+
 }
 
 func (cs *CanbusnativeData) Bind(name string) error {
@@ -50,6 +56,10 @@ func (cs CanbusnativeData) Recv() (canbus.Frame, error) {
 }
 
 func (cs *CanbusnativeData) Send(msg canbus.Frame) error {
+
+	if cs.listenOnly {
+		return errors.New("cannot send in listen-only mode")
+	}
 
 	if cs.sock != nil {
 		_, err := cs.sock.Send(msg)

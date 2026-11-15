@@ -3,6 +3,7 @@ package canbus_archiver
 import (
 	"encoding/gob"
 	"errors"
+	"log"
 	"os"
 	"time"
 
@@ -27,10 +28,16 @@ func New() (*Canbusnativearchiver_Data, error) {
 
 }
 
+func (cs *Canbusnativearchiver_Data) SetListenOnly(listenOnly bool) {
+	// do nothing, this is a write-only archive
+}
+
 func (cs *Canbusnativearchiver_Data) BindDefault() error {
 
 	newuuid := uuid.New()
 	filename := "./data/" + newuuid.String() + ".can"
+
+	log.Printf("Logging to %s\r", filename)
 
 	return cs.Bind(filename)
 

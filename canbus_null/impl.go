@@ -17,6 +17,9 @@ func New() (*CanbusnullData, error) {
 
 }
 
+func (cs *CanbusnullData) SetListenOnly(listenOnly bool) {
+}
+
 func (cs CanbusnullData) BindDefault() error {
 
 	return nil

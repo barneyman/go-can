@@ -24,6 +24,10 @@ func New() (*Canbusnativearchive_Data, error) {
 
 }
 
+func (cs *Canbusnativearchive_Data) SetListenOnly(listenOnly bool) {
+	// do nothing, this is a read-only archive
+}
+
 func (cs *Canbusnativearchive_Data) BindDefault() error {
 
 	// get list of files from data and get the newest one
