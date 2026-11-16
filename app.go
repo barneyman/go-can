@@ -11,6 +11,7 @@ import (
 	"go-can/canbus_native"
 	"go-can/canbus_null"
 	"go-can/canbus_test"
+	"go-can/odb_handler"
 	"io"
 	"log"
 	"os"
@@ -29,20 +30,12 @@ func init() {
 
 }
 
-type canbusHandler interface {
-	BindDefault() error
-	Bind(string) error
-	Close()
-	Recv() (canbus.Frame, error)
-	Send(canbus.Frame) error
-}
-
 type shutdownRequest struct {
 	Mandatory bool // think - battery voltage too low, you MUST exit
 	Seconds   int  // how many seconds until i shutdown
 }
 
-func handlePower(canbus_exit chan string) error {
+func handlePower(canbus_exit_channel chan string) error {
 
 	err := rpio.Open()
 
@@ -168,7 +161,7 @@ func handlePower(canbus_exit chan string) error {
 				log.Print("Shutdown timer expired, stopping canbus")
 
 				// tell can to bail gracefully
-				canbus_exit <- "canbus-end"
+				canbus_exit_channel <- "canbus-end"
 				time.Sleep(time.Second)
 
 				log.Print("proceeding to system shutdown request")
@@ -190,14 +183,22 @@ func handlePower(canbus_exit chan string) error {
 
 func main() {
 
-	canbus_exit := make(chan string)
+	canbus_exit_channel := make(chan string)
 
-	var canbussrc, canbusdst canbusHandler
+	var canbussrc, canbusdst odb_handler.CanbusHandler
 	var err error
 
 	// check what we're being asked for
 	namedSrc := os.Getenv("CANSRC")
 	namedDst := os.Getenv("CANDEST")
+	listenOnly := false
+	if os.Getenv("LISTEN_ONLY") != "" {
+		listenOnly = true
+	}
+
+	if listenOnly {
+		log.Print("LISTEN_ONLY mode enabled")
+	}
 
 	switch namedSrc {
 	case "native":
@@ -216,6 +217,8 @@ func main() {
 		log.Print(err.Error())
 	}
 
+	canbussrc.SetListenOnly(listenOnly)
+
 	switch namedDst {
 	case "archive":
 		canbusdst, err = canbus_archiver.New()
@@ -230,13 +233,13 @@ func main() {
 	}
 
 	// & because Recv receives a pointer
-	go can_dump(canbussrc, canbusdst, canbus_exit)
+	go can_dump(canbussrc, canbusdst, !listenOnly, canbus_exit_channel)
 
 	for {
 
 	}
 	// look after the power
-	err = handlePower(canbus_exit)
+	err = handlePower(canbus_exit_channel)
 
 	log.Print("main exiting")
 
@@ -285,133 +288,7 @@ func serialiseFrame(frame canbus.Frame) ([]byte, error) {
 
 // }
 
-type PIDsupported int
-type PIDscanning int
-
-const (
-	UnknownSupport PIDsupported = iota
-	Supported
-	Unsupported
-)
-
-const (
-	NotStarted PIDscanning = iota
-	Ongoing
-	Done
-)
-
-type PIDHandler struct {
-	cbHandler      canbusHandler
-	suppportedPIDs [255]PIDsupported
-	ScanStarted    PIDscanning
-}
-
-type PIDresponse struct {
-	respID  int
-	service int
-	PID     int
-	data    []byte
-}
-
-const PID_RESPONSE_FLAG byte = 0x40
-const OBD2_ID uint = 0x7DF
-
-func (ph *PIDHandler) Parse(resp canbus.Frame) error {
-
-	// check packet integrity
-	pidlen := int(resp.Data[0])
-
-	if len(resp.Data) <= pidlen {
-		return errors.New("wrong size payload")
-	}
-
-	// confirm it's a response
-	if resp.Data[1]&0x40 == 0 {
-		return errors.New("not a response payload")
-	}
-
-	response := PIDresponse{respID: int(resp.ID), service: int(resp.Data[1] &^ PID_RESPONSE_FLAG), PID: int(resp.Data[2]), data: resp.Data[3:]}
-
-	log.Printf("Parsing ID: %x Service %d PID: %x\r", response.respID, response.service, response.PID)
-
-	if response.service != 1 {
-		return errors.New("unsupported service")
-	}
-
-	switch response.PID {
-	// handle supported PIDs
-	case 0, 32, 64, 96, 128, 160, 192:
-		if response.PID == 0 {
-			ph.ScanStarted = Ongoing
-		}
-		// populate the array
-		offset := 1 + (response.PID)
-
-		for _, v := range response.data {
-			for bit := 7; bit >= 0; bit-- {
-				if (v & (1 << bit)) != 0 {
-					ph.suppportedPIDs[offset] = Supported
-				} else {
-					ph.suppportedPIDs[offset] = Unsupported
-				}
-				offset++
-			}
-		}
-
-		if response.PID < 192 {
-			ph.GetSupportedPID(uint(response.PID) + 1)
-		} else {
-			ph.ScanStarted = Done
-		}
-		return nil
-	}
-
-	return nil
-}
-
-func (ph PIDHandler) sendOBD_PID_Current(PID uint, reqData []byte) error {
-
-	return ph.sendPID(OBD2_ID, 1, PID, reqData)
-}
-
-func (ph PIDHandler) sendOBD_PID(Service, PID uint, reqData []byte) error {
-
-	return ph.sendPID(OBD2_ID, Service, PID, reqData)
-}
-
-func (ph PIDHandler) sendPID(ID, Service, PID uint, reqData []byte) error {
-
-	// check
-	if ph.suppportedPIDs[PID] == Unsupported {
-		return errors.New("unsupported pid")
-	}
-
-	frameData := []byte{byte(Service), byte(PID)}
-	frameData = append(frameData, reqData...)
-
-	cf := canbus.Frame{ID: uint32(ID), Data: frameData, Kind: canbus.SFF}
-
-	return ph.cbHandler.Send(cf)
-
-}
-
-func (ph PIDHandler) GetSupportedPID(startAt uint) error {
-
-	log.Printf("GetSupportedPID %d\r", startAt)
-
-	// check startAt
-	if startAt > 7 {
-		return errors.New("PID request too high")
-	}
-
-	return ph.sendOBD_PID_Current(0, []byte{})
-}
-
-func (ph PIDHandler) GetRPM() error {
-	return ph.sendOBD_PID_Current(0xC, []byte{})
-}
-
-func can_dump(canbusSrc, canbusDst canbusHandler, exit chan string) {
+func can_dump(canbusSrc, canbusDst odb_handler.CanbusHandler, sendPids bool, exit chan string) {
 
 	// vital thse are closed sanely
 	defer canbusSrc.Close()
@@ -428,7 +305,7 @@ func can_dump(canbusSrc, canbusDst canbusHandler, exit chan string) {
 		log.Fatal(err.Error())
 	}
 
-	myPIDhandler := PIDHandler{cbHandler: canbusSrc}
+	myPIDhandler := odb_handler.PIDHandler{CbHandler: canbusSrc, SendPids: sendPids}
 
 	readChan := make(chan canbus.Frame)
 	/*
@@ -463,15 +340,33 @@ func can_dump(canbusSrc, canbusDst canbusHandler, exit chan string) {
 		}
 	}()
 
-	log.Print("canbus main loop")
+	log.Print("canbus main loop starting ...")
 
+	// important info
+	CriticalInfoRequestTicker := time.NewTicker(24 * time.Hour)
+	defer CriticalInfoRequestTicker.Stop()
+
+	// less important
+	LessCriticalInfoRequestTicker := time.NewTicker(24 * time.Hour)
+	defer LessCriticalInfoRequestTicker.Stop()
+
+	pidSupportedTicker := time.NewTicker(2 * time.Second)
+	defer pidSupportedTicker.Stop()
+
+outerLoop:
 	for {
 		select {
 		case <-exit:
 			log.Print("can_dump exiting")
+			break outerLoop
 		case msg := <-readChan:
 
-			myPIDhandler.Parse(msg)
+			_, err := myPIDhandler.Parse(msg)
+
+			if err != nil {
+				log.Print(err.Error())
+				continue
+			}
 
 			// send it to the archiver
 			if canbusDst.Send(msg) == nil {
@@ -479,18 +374,46 @@ func can_dump(canbusSrc, canbusDst canbusHandler, exit chan string) {
 				log.Print(string(frameBytes))
 			}
 
-		default:
-			if myPIDhandler.ScanStarted == NotStarted {
+		case <-LessCriticalInfoRequestTicker.C:
+
+			myPIDhandler.GetFuelLevel()
+			myPIDhandler.GetEngineRuntimeS()
+
+		case <-CriticalInfoRequestTicker.C:
+			// send out requests
+			myPIDhandler.GetRPM()
+			myPIDhandler.GetSpeedKPH()
+			myPIDhandler.GetThrottlePos()
+
+		case <-pidSupportedTicker.C:
+
+			switch myPIDhandler.ScanStarted {
+
+			case odb_handler.NotStarted:
+				log.Printf("Starting PID Support Query")
 				// start the PID check
 				err = myPIDhandler.GetSupportedPID(0)
 
 				if err != nil {
 					log.Print(err.Error())
 				}
+			case odb_handler.Complete:
+				if myPIDhandler.SendPids {
+
+					log.Printf("Starting Data Query ticker")
+					CriticalInfoRequestTicker.Stop()
+					CriticalInfoRequestTicker = time.NewTicker(100 * time.Millisecond)
+
+					LessCriticalInfoRequestTicker.Stop()
+					LessCriticalInfoRequestTicker = time.NewTicker(1 * time.Minute)
+				}
+
+				myPIDhandler.ScanStarted = odb_handler.Closed
+
+			case odb_handler.Ongoing:
+				log.Print("PID Support Query still ongoing")
 
 			}
-
-			time.Sleep(20 * time.Second)
 
 		}
 	}

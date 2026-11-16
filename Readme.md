@@ -24,3 +24,13 @@ cangen vcan0 -I 181 -L 8 -D D204000000000000 -g 20
 # Steering: -12.34° (0xFB2E in signed 16-bit two's complement)
 cangen vcan0 -I 181 -L 8 -D 2EFB000000000000 -g 20
 ```
+
+### cansend
+
+```
+# request Engine RPM
+cansend vcan0 7DF#02010C0000000000
+
+# response
+cansend vcan0 7E8#04410C0FA0000000
+```
