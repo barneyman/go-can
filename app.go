@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"go-can/canbus_archive"
@@ -196,6 +197,15 @@ func main() {
 		listenOnly = true
 	}
 
+	// create a Timeout channel to send one tick after timeout
+	// channel with a buffer of 1 to avoid blocking
+	endTick := make(chan time.Time, 1)
+
+	timeout := time.AfterFunc(15*time.Second, func() {
+		endTick <- time.Now()
+	})
+	defer timeout.Stop()
+
 	if listenOnly {
 		log.Print("LISTEN_ONLY mode enabled")
 	}
@@ -217,6 +227,8 @@ func main() {
 		log.Print(err.Error())
 	}
 
+	defer canbussrc.Close()
+
 	canbussrc.SetListenOnly(listenOnly)
 
 	switch namedDst {
@@ -232,21 +244,25 @@ func main() {
 		log.Print(err.Error())
 	}
 
+	defer canbusdst.Close()
+
 	// & because Recv receives a pointer
 	go can_dump(canbussrc, canbusdst, !listenOnly, canbus_exit_channel)
 
-	for {
+	<-endTick
 
-	}
-	// look after the power
-	err = handlePower(canbus_exit_channel)
+	// for {
+
+	// }
+	// // look after the power
+	// err = handlePower(canbus_exit_channel)
 
 	log.Print("main exiting")
 
-	if err != nil {
-		log.Print("handlePower error " + err.Error())
+	// if err != nil {
+	// 	log.Print("handlePower error " + err.Error(d))d
 
-	}
+	// }
 
 	// otherwise shutdown
 	if os.Getenv("SHUTDOWN") != "" {
@@ -371,7 +387,7 @@ outerLoop:
 			// send it to the archiver
 			if canbusDst.Send(msg) == nil {
 				frameBytes, _ := serialiseFrame(msg)
-				log.Print(string(frameBytes))
+				log.Print(hex.EncodeToString(frameBytes))
 			}
 
 		case <-LessCriticalInfoRequestTicker.C:

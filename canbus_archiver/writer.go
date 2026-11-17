@@ -1,7 +1,9 @@
 package canbus_archiver
 
 import (
+	"bytes"
 	"encoding/gob"
+	"encoding/hex"
 	"errors"
 	"log"
 	"os"
@@ -64,6 +66,40 @@ func (cs *Canbusnativearchiver_Data) Close() {
 
 func (cs *Canbusnativearchiver_Data) Recv() (canbus.Frame, error) {
 	return canbus.Frame{}, errors.New("not implemented")
+}
+
+func EncodeFrameToHexBytes(data any) ([]byte, error) {
+
+	var buf bytes.Buffer
+
+	encoder := gob.NewEncoder(&buf)
+	err := encoder.Encode(data)
+	if err != nil {
+		return nil, err
+	}
+	rawBytes := buf.Bytes()
+	hexBytes := make([]byte, hex.EncodedLen(len(rawBytes)))
+	hex.Encode(hexBytes, rawBytes)
+
+	return hexBytes, nil
+}
+
+func DecodeHexBytesToFrame(hexBytes []byte, data any) error {
+
+	rawBytes := make([]byte, hex.DecodedLen(len(hexBytes)))
+	_, err := hex.Decode(rawBytes, hexBytes)
+	if err != nil {
+		return err
+	}
+
+	buf := bytes.NewBuffer(rawBytes)
+	decoder := gob.NewDecoder(buf)
+	err = decoder.Decode(data)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (cs *Canbusnativearchiver_Data) Send(msg canbus.Frame) error {

@@ -30,7 +30,9 @@ cangen vcan0 -I 181 -L 8 -D 2EFB000000000000 -g 20
 ```
 # request Engine RPM
 cansend vcan0 7DF#02010C0000000000
+cangen vcan0 -I 7E8 -L 8 -D 04410C0FA0000000 -n 1 -v
 
-# response
+# response Speed
 cansend vcan0 7E8#04410C0FA0000000
+cangen vcan0 -I 7E8 -L 8 -D 03410D4300000000 -n 1 -v
 ```

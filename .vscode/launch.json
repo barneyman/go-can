@@ -20,7 +20,8 @@
             "env": {
                 "CANSRC": "archive",
                 "CANDEST": "null",
-                "SHUTDOWN_IN_SECONDS": "180"
+                "SHUTDOWN_IN_SECONDS": "180",
+                "LISTEN_ONLY": "YES",
             }
         },
         {
@@ -57,6 +58,7 @@
                 "CANSRC": "vcan",
                 "CANDEST": "archive",
                 "LISTEN_ONLY": "YES",
+                "TIMEOUT": "30",
             }
         }
     ]

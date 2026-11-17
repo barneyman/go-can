@@ -14,8 +14,9 @@ import (
 
 // archive reader
 type Canbusnativearchive_Data struct {
-	handle  *os.File
-	decoder *gob.Decoder
+	handle            *os.File
+	decoder           *gob.Decoder
+	startAt, lastSend time.Time
 }
 
 func New() (*Canbusnativearchive_Data, error) {

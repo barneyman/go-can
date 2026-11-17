@@ -3,6 +3,7 @@ package odb_handler
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log"
 
 	"github.com/go-daq/canbus"
@@ -49,6 +50,12 @@ type PIDresponse struct {
 	data    []byte
 }
 
+type PidResultDecoder struct {
+	PID      int16
+	Validate func(frame PIDresponse) error
+	Decode   func(frame PIDresponse) (string, error)
+}
+
 // Arbitration IDs
 
 const OBD2_ID uint16 = 0x7DF
@@ -59,8 +66,45 @@ const OBD2_ID_MAX_RESPONSE uint32 = 0x7EF
 // Flags
 const PID_RESPONSE_FLAG byte = 0x40
 
+// PIDs
+const PID_RPM int16 = 0xC
+const PID_SPEED_KPH int16 = 0xD
+
 // services
 const ODBC_SERVICE_CURRENT byte = 0x01
+
+var PidResultDecoders = []PidResultDecoder{
+	{PID: PID_RPM,
+		Validate: func(frame PIDresponse) error {
+			if len(frame.data) < 2 {
+				return errors.New("not enough data for RPM")
+			}
+			return nil
+		},
+		Decode: func(frame PIDresponse) (string, error) {
+			if len(frame.data) < 2 {
+				return "", errors.New("not enough data for RPM")
+			}
+			rpm := (int(frame.data[0])<<8 | int(frame.data[1])) / 4
+			return fmt.Sprintf("%d RPM", rpm), nil
+		},
+	},
+	{PID: PID_SPEED_KPH,
+		Validate: func(frame PIDresponse) error {
+			if len(frame.data) < 1 {
+				return errors.New("not enough data for speed")
+			}
+			return nil
+		},
+		Decode: func(frame PIDresponse) (string, error) {
+			if len(frame.data) < 1 {
+				return "", errors.New("not enough data for speed")
+			}
+			speed := int(frame.data[0])
+			return fmt.Sprintf("%d KPH", speed), nil
+		},
+	},
+}
 
 func (ph *PIDHandler) Parse(resp canbus.Frame) (bool, error) {
 
@@ -125,6 +169,20 @@ func (ph *PIDHandler) Parse(resp canbus.Frame) (bool, error) {
 			ph.ScanStarted = Complete
 		}
 		return isResponsePid, nil
+	case int(PID_RPM), int(PID_SPEED_KPH):
+		for _, decoder := range PidResultDecoders {
+			if decoder.PID == int16(response.PID) {
+				err := decoder.Validate(response)
+				if err != nil {
+					return isResponsePid, err
+				}
+				result, err := decoder.Decode(response)
+				if err != nil {
+					return isResponsePid, err
+				}
+				log.Printf("Decoded result for PID %d: %s", response.PID, result)
+			}
+		}
 	}
 
 	return isResponsePid, nil
@@ -189,11 +247,11 @@ func (ph *PIDHandler) GetSupportedPID(startAt uint) error {
 //////////////////////////////////////////////////////////////
 
 func (ph PIDHandler) GetRPM() error {
-	return ph.sendOBD_PID_CurrentData(0xC, []byte{})
+	return ph.sendOBD_PID_CurrentData(uint32(PID_RPM), []byte{})
 }
 
 func (ph PIDHandler) GetSpeedKPH() error {
-	return ph.sendOBD_PID_CurrentData(0xD, []byte{})
+	return ph.sendOBD_PID_CurrentData(uint32(PID_SPEED_KPH), []byte{})
 }
 
 func (ph PIDHandler) GetThrottlePos() error {
