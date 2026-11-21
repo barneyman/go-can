@@ -1,34 +1,30 @@
-package rpicarpihatPower
+package Power
 
 import (
 	"context"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/barneyman/go-rpio/v4"
 )
 
-type rpi struct {
-}
-type RunMonitor struct {
-	// fields for the power monitor
-	exitPower chan bool
-}
-
 type RPICarPiHatPower struct {
-	runMonitor *RunMonitor
 
 	// our specific things
 	ignitionPin        rpio.Pin
 	latchPin           rpio.Pin
 	ignCheckTimeout    time.Duration
 	graceShutdownTimer time.Duration
+	exitPower          chan bool
 }
 
 func NewRPICarPiHatPower() *RPICarPiHatPower {
-	return &RPICarPiHatPower{
-		runMonitor: &RunMonitor{},
-	}
+	return &RPICarPiHatPower{}
+}
+
+func (rm *RPICarPiHatPower) GetExitPowerChannel() chan bool {
+	return rm.exitPower
 }
 
 func (rm *RPICarPiHatPower) Init(graceShutdown, ignCheckTimout time.Duration) error {
@@ -37,6 +33,7 @@ func (rm *RPICarPiHatPower) Init(graceShutdown, ignCheckTimout time.Duration) er
 	if err != nil {
 		return err
 	}
+	rm.exitPower = make(chan bool)
 
 	rm.ignCheckTimeout = ignCheckTimout
 	rm.graceShutdownTimer = graceShutdown
@@ -58,8 +55,16 @@ func (rm *RPICarPiHatPower) Init(graceShutdown, ignCheckTimout time.Duration) er
 	return nil
 }
 
+func (rm *RPICarPiHatPower) GetExitPower() chan bool {
+	return rm.exitPower
+}
+
 // this will be launched as a goroutine to monitor the power state and handle shutdown requests
-func (rm *RPICarPiHatPower) Run(ctx context.Context) {
+func (rm *RPICarPiHatPower) Run(ctx context.Context, wg *sync.WaitGroup) {
+
+	// add my interest
+	wg.Add(1)
+	defer wg.Done()
 
 	// we have to assume ignition was high recently, or we wouldn't have power, so we can start with that assumption
 	lastIgnitionState := true
@@ -119,9 +124,10 @@ func (rm *RPICarPiHatPower) Run(ctx context.Context) {
 			// grace has expired ... tell dad we WANT to turn the power off
 			// we will wait for the ctx before we actually exit, gives other processes
 			// to exit cleanly
-			rm.runMonitor.exitPower <- true
+			rm.GetExitPower() <- true
 		}
 	}
+	log.Print("RPICarPiHatPower.Run exiting")
 
 }
 

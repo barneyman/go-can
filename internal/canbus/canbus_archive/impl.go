@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-daq/canbus"
 
-	"go-can/canbus_archiver"
+	"go-can/internal/canbus/canbus_archiver"
 )
 
 // archive reader

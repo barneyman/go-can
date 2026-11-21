@@ -1,28 +1,11 @@
 package main
 
 import (
-	"bytes"
-	"context"
 	"encoding/gob"
-	"encoding/hex"
-	"encoding/json"
-	"errors"
-	"go-can/canbus_archive"
-	"go-can/canbus_archiver"
-	"go-can/canbus_native"
-	"go-can/canbus_null"
-	"go-can/canbus_test"
-	"go-can/odb_handler"
-	"io"
+	"go-can/internal/canbus/canbus_archiver"
 	"log"
-	"os"
-	"os/exec"
-	"strconv"
-	"time"
 
-	"github.com/barneyman/go-rpio/v4"
 	"github.com/go-daq/canbus"
-	"github.com/redis/go-redis/v9"
 )
 
 func init() {
@@ -36,151 +19,151 @@ type shutdownRequest struct {
 	Seconds   int  // how many seconds until i shutdown
 }
 
-func handlePower(canbus_exit_channel chan string) error {
+// func handlePower(canbus_exit_channel chan string) error {
 
-	err := rpio.Open()
+// 	err := rpio.Open()
 
-	if err != nil {
-		return err
-	}
+// 	if err != nil {
+// 		return err
+// 	}
 
-	defer rpio.Close()
+// 	defer rpio.Close()
 
-	ctx := context.Background()
+// 	ctx := context.Background()
 
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "", // no password set
-		DB:       0,  // use default DB
-	})
+// 	rdb := redis.NewClient(&redis.Options{
+// 		Addr:     "localhost:6379",
+// 		Password: "", // no password set
+// 		DB:       0,  // use default DB
+// 	})
 
-	for retry := 0; retry < 15; retry++ {
-		_, err = rdb.Ping(ctx).Result()
-		if err != nil {
-			time.Sleep(time.Second * 2)
-			log.Print("Trying to ping redis again")
-		} else {
-			break
-		}
+// 	for retry := 0; retry < 15; retry++ {
+// 		_, err = rdb.Ping(ctx).Result()
+// 		if err != nil {
+// 			time.Sleep(time.Second * 2)
+// 			log.Print("Trying to ping redis again")
+// 		} else {
+// 			break
+// 		}
 
-	}
+// 	}
 
-	if err != nil {
-		return err
-	}
+// 	if err != nil {
+// 		return err
+// 	}
 
-	defer rdb.Close()
+// 	defer rdb.Close()
 
-	redissub := rdb.Subscribe(ctx, "shutdown_deny")
+// 	redissub := rdb.Subscribe(ctx, "shutdown_deny")
 
-	defer redissub.Close()
+// 	defer redissub.Close()
 
-	ignitionPin := rpio.Pin(12)
-	latchPin := rpio.Pin(25)
+// 	ignitionPin := rpio.Pin(12)
+// 	latchPin := rpio.Pin(25)
 
-	ignitionPin.Mode(rpio.Input)
-	latchPin.Mode(rpio.Output)
+// 	ignitionPin.Mode(rpio.Input)
+// 	latchPin.Mode(rpio.Output)
 
-	latchPin.High()
+// 	latchPin.High()
 
-	ignStateChannel := make(chan rpio.State)
+// 	ignStateChannel := make(chan rpio.State)
 
-	timeBetweenIGNchecks := time.Millisecond * 250
+// 	timeBetweenIGNchecks := time.Millisecond * 250
 
-	go func() {
+// 	go func() {
 
-		previousIgnState := rpio.High
+// 		previousIgnState := rpio.High
 
-		for {
-			ignState := ignitionPin.Read()
+// 		for {
+// 			ignState := ignitionPin.Read()
 
-			if previousIgnState != ignState {
-				log.Printf("ign switched from %v to %v", previousIgnState, ignState)
-				previousIgnState = ignState
-				// send it on
-				ignStateChannel <- ignState
-			}
+// 			if previousIgnState != ignState {
+// 				log.Printf("ign switched from %v to %v", previousIgnState, ignState)
+// 				previousIgnState = ignState
+// 				// send it on
+// 				ignStateChannel <- ignState
+// 			}
 
-			time.Sleep(timeBetweenIGNchecks)
+// 			time.Sleep(timeBetweenIGNchecks)
 
-		}
+// 		}
 
-	}()
+// 	}()
 
-	timeBeforeShutdown := 5
-	timeBeforeQuery := timeBeforeShutdown
+// 	timeBeforeShutdown := 5
+// 	timeBeforeQuery := timeBeforeShutdown
 
-	// allow us to fake timeouts during test data creation
-	if os.Getenv("SHUTDOWN_IN_SECONDS") != "" {
-		timeBeforeQuery, err = strconv.Atoi(os.Getenv("SHUTDOWN_IN_SECONDS"))
-	}
+// 	// allow us to fake timeouts during test data creation
+// 	if os.Getenv("SHUTDOWN_IN_SECONDS") != "" {
+// 		timeBeforeQuery, err = strconv.Atoi(os.Getenv("SHUTDOWN_IN_SECONDS"))
+// 	}
 
-	// sanity check
-	if timeBeforeQuery == 0 || err != nil {
-		timeBeforeQuery = timeBeforeShutdown
-	}
+// 	// sanity check
+// 	if timeBeforeQuery == 0 || err != nil {
+// 		timeBeforeQuery = timeBeforeShutdown
+// 	}
 
-	for {
+// 	for {
 
-		// create stopped, benign timers
-		queryTimer := time.NewTimer(time.Minute)
-		queryTimer.Stop()
+// 		// create stopped, benign timers
+// 		queryTimer := time.NewTimer(time.Minute)
+// 		queryTimer.Stop()
 
-		shutdownTimer := time.NewTimer(time.Minute)
-		shutdownTimer.Stop()
+// 		shutdownTimer := time.NewTimer(time.Minute)
+// 		shutdownTimer.Stop()
 
-		for {
-			select {
-			case ignState := <-ignStateChannel:
-				if ignState == rpio.Low {
-					// ign off, ask everybody if it's ok to shutdown in queryTimer time
-					log.Print("Ign turned off, starting query timer")
-					queryTimer.Reset(time.Second * time.Duration(timeBeforeQuery))
-				} else {
-					log.Print("Ign turned on, killing all timers")
-					// we're back on, cancel all timers
-					queryTimer.Stop()
-					shutdownTimer.Stop()
-				}
+// 		for {
+// 			select {
+// 			case ignState := <-ignStateChannel:
+// 				if ignState == rpio.Low {
+// 					// ign off, ask everybody if it's ok to shutdown in queryTimer time
+// 					log.Print("Ign turned off, starting query timer")
+// 					queryTimer.Reset(time.Second * time.Duration(timeBeforeQuery))
+// 				} else {
+// 					log.Print("Ign turned on, killing all timers")
+// 					// we're back on, cancel all timers
+// 					queryTimer.Stop()
+// 					shutdownTimer.Stop()
+// 				}
 
-			case <-queryTimer.C:
-				// craft the request
-				sdr := shutdownRequest{Mandatory: false, Seconds: timeBeforeShutdown}
-				jsonData, _ := json.Marshal(sdr)
-				log.Print("Requesting permission to shutdown ...")
-				err = rdb.Publish(ctx, "shutdown", string(jsonData)).Err()
-				if err != nil {
-					log.Print(err)
-				}
+// 			case <-queryTimer.C:
+// 				// craft the request
+// 				sdr := shutdownRequest{Mandatory: false, Seconds: timeBeforeShutdown}
+// 				jsonData, _ := json.Marshal(sdr)
+// 				log.Print("Requesting permission to shutdown ...")
+// 				err = rdb.Publish(ctx, "shutdown", string(jsonData)).Err()
+// 				if err != nil {
+// 					log.Print(err)
+// 				}
 
-				// restart the timer - if i don't hear from anyone ....
-				log.Print("waiting for any responses ...")
-				shutdownTimer.Reset(time.Second * time.Duration(timeBeforeShutdown))
+// 				// restart the timer - if i don't hear from anyone ....
+// 				log.Print("waiting for any responses ...")
+// 				shutdownTimer.Reset(time.Second * time.Duration(timeBeforeShutdown))
 
-			case <-shutdownTimer.C:
+// 			case <-shutdownTimer.C:
 
-				log.Print("Shutdown timer expired, stopping canbus")
+// 				log.Print("Shutdown timer expired, stopping canbus")
 
-				// tell can to bail gracefully
-				canbus_exit_channel <- "canbus-end"
-				time.Sleep(time.Second)
+// 				// tell can to bail gracefully
+// 				canbus_exit_channel <- "canbus-end"
+// 				time.Sleep(time.Second)
 
-				log.Print("proceeding to system shutdown request")
-				// proceed to shutdown
-				return nil
+// 				log.Print("proceeding to system shutdown request")
+// 				// proceed to shutdown
+// 				return nil
 
-			case <-redissub.Channel():
-				// redis has sent a message
-				log.Print("shutdown deferred")
-				shutdownTimer.Stop()
-				log.Print("shutdown timer reset")
-				queryTimer.Reset(time.Second * time.Duration(timeBeforeQuery))
-			}
+// 			case <-redissub.Channel():
+// 				// redis has sent a message
+// 				log.Print("shutdown deferred")
+// 				shutdownTimer.Stop()
+// 				log.Print("shutdown timer reset")
+// 				queryTimer.Reset(time.Second * time.Duration(timeBeforeQuery))
+// 			}
 
-		}
+// 		}
 
-	}
-}
+// 	}
+// }
 
 func main() {
 
@@ -197,254 +180,254 @@ func main() {
 
 	////
 
-	canbus_exit_channel := make(chan string)
+	// canbus_exit_channel := make(chan string)
 
-	var canbussrc, canbusdst odb_handler.CanbusHandler
-	var err error
+	// var canbussrc, canbusdst odb_handler.CanbusHandler
+	// var err error
 
-	// check what we're being asked for
-	namedSrc := os.Getenv("CANSRC")
-	namedDst := os.Getenv("CANDEST")
-	listenOnly := false
-	if os.Getenv("LISTEN_ONLY") != "" {
-		listenOnly = true
-	}
-
-	// create a Timeout channel to send one tick after timeout
-	// channel with a buffer of 1 to avoid blocking
-	endTick := make(chan time.Time, 1)
-
-	timeout := time.AfterFunc(15*time.Second, func() {
-		endTick <- time.Now()
-	})
-	defer timeout.Stop()
-
-	if listenOnly {
-		log.Print("LISTEN_ONLY mode enabled")
-	}
-
-	switch namedSrc {
-	case "native":
-		canbussrc, err = canbus_native.New()
-	case "archive":
-		canbussrc, err = canbus_archive.New()
-	case "test":
-		canbussrc, err = canbus_test.New()
-	case "vcan":
-		canbussrc, err = canbus_native.NewVirtual()
-	default:
-		log.Fatal("no CANSRC requested")
-	}
-
-	if err != nil {
-		log.Print(err.Error())
-	}
-
-	defer canbussrc.Close()
-
-	canbussrc.SetListenOnly(listenOnly)
-
-	switch namedDst {
-	case "archive":
-		canbusdst, err = canbus_archiver.New()
-	case "null":
-		canbusdst, err = canbus_null.New()
-	default:
-		log.Fatal("no CANDEST requseted")
-	}
-
-	if err != nil {
-		log.Print(err.Error())
-	}
-
-	defer canbusdst.Close()
-
-	// & because Recv receives a pointer
-	go can_dump(canbussrc, canbusdst, !listenOnly, canbus_exit_channel)
-
-	<-endTick
-
-	// for {
-
+	// // check what we're being asked for
+	// namedSrc := os.Getenv("CANSRC")
+	// namedDst := os.Getenv("CANDEST")
+	// listenOnly := false
+	// if os.Getenv("LISTEN_ONLY") != "" {
+	// 	listenOnly = true
 	// }
-	// // look after the power
-	// err = handlePower(canbus_exit_channel)
 
-	log.Print("main exiting")
+	// // create a Timeout channel to send one tick after timeout
+	// // channel with a buffer of 1 to avoid blocking
+	// endTick := make(chan time.Time, 1)
+
+	// timeout := time.AfterFunc(15*time.Second, func() {
+	// 	endTick <- time.Now()
+	// })
+	// defer timeout.Stop()
+
+	// if listenOnly {
+	// 	log.Print("LISTEN_ONLY mode enabled")
+	// }
+
+	// switch namedSrc {
+	// case "native":
+	// 	canbussrc, err = canbus_native.New()
+	// case "archive":
+	// 	canbussrc, err = canbus_archive.New()
+	// case "test":
+	// 	canbussrc, err = canbus_test.New()
+	// case "vcan":
+	// 	canbussrc, err = canbus_native.NewVirtual()
+	// default:
+	// 	log.Fatal("no CANSRC requested")
+	// }
 
 	// if err != nil {
-	// 	log.Print("handlePower error " + err.Error(d))d
-
+	// 	log.Print(err.Error())
 	// }
 
-	// otherwise shutdown
-	if os.Getenv("SHUTDOWN") != "" {
-		shutdown()
-	}
+	// defer canbussrc.Close()
+
+	// canbussrc.SetListenOnly(listenOnly)
+
+	// switch namedDst {
+	// case "archive":
+	// 	canbusdst, err = canbus_archiver.New()
+	// case "null":
+	// 	canbusdst, err = canbus_null.New()
+	// default:
+	// 	log.Fatal("no CANDEST requseted")
+	// }
+
+	// if err != nil {
+	// 	log.Print(err.Error())
+	// }
+
+	// defer canbusdst.Close()
+
+	// // & because Recv receives a pointer
+	// go can_dump(canbussrc, canbusdst, !listenOnly, canbus_exit_channel)
+
+	// <-endTick
+
+	// // for {
+
+	// // }
+	// // // look after the power
+	// // err = handlePower(canbus_exit_channel)
+
+	// log.Print("main exiting")
+
+	// // if err != nil {
+	// // 	log.Print("handlePower error " + err.Error(d))d
+
+	// // }
+
+	// // otherwise shutdown
+	// if os.Getenv("SHUTDOWN") != "" {
+	// 	shutdown()
+	// }
 
 }
 
-func shutdown() {
+// func shutdown() {
 
-	cmd := exec.Command("sudo", "shutdown", "-h", "now")
+// 	cmd := exec.Command("sudo", "shutdown", "-h", "now")
 
-	// Run the command and capture any errors.
-	err := cmd.Run()
-	if err != nil {
-		log.Fatalf("Failed to execute shutdown command: %v", err)
-	}
-
-}
-
-func serialiseFrame(frame canbus.Frame) ([]byte, error) {
-
-	b := bytes.Buffer{}
-	e := gob.NewEncoder(&b)
-	err := e.Encode((frame))
-
-	return b.Bytes(), err
-
-}
-
-// func deserialiseFrame(sframe []byte) (canbus.Frame, error) {
-
-// 	m := canbus.Frame{}
-// 	d := gob.NewDecoder(bytes.NewReader(sframe))
-
-// 	err := d.Decode(&m)
-
-// 	return m, err
+// 	// Run the command and capture any errors.
+// 	err := cmd.Run()
+// 	if err != nil {
+// 		log.Fatalf("Failed to execute shutdown command: %v", err)
+// 	}
 
 // }
 
-func can_dump(canbusSrc, canbusDst odb_handler.CanbusHandler, sendPids bool, exit chan string) {
+// func serialiseFrame(frame canbus.Frame) ([]byte, error) {
 
-	// vital thse are closed sanely
-	defer canbusSrc.Close()
-	defer canbusDst.Close()
+// 	b := bytes.Buffer{}
+// 	e := gob.NewEncoder(&b)
+// 	err := e.Encode((frame))
 
-	err := canbusSrc.BindDefault()
+// 	return b.Bytes(), err
 
-	if err != nil {
-		log.Fatal(err.Error())
-	}
+// }
 
-	err = canbusDst.BindDefault()
-	if err != nil {
-		log.Fatal(err.Error())
-	}
+// // func deserialiseFrame(sframe []byte) (canbus.Frame, error) {
 
-	myPIDhandler := odb_handler.PIDHandler{CbHandler: canbusSrc, SendPids: sendPids}
+// // 	m := canbus.Frame{}
+// // 	d := gob.NewDecoder(bytes.NewReader(sframe))
 
-	readChan := make(chan canbus.Frame)
-	/*
-		// 2 len data bytes 1 mode 0xd vehicle rpm 5 bytes padding to 8
-		reqData := []byte{2, 1, 0xc, 0, 0, 0, 0, 0}
+// // 	err := d.Decode(&m)
 
-		// 2 len data bytes 1 mode 0x2f fuel level 5 bytes padding to 8
-		// reqData = []byte{2, 1, 0xd, 0, 0, 0, 0, 0}
+// // 	return m, err
 
-		// response is
-		// [src ID 7e8] [len] [mode | 0x40] [pid] [result]
+// // }
 
-		// RPM
-		request := canbus.Frame{ID: 0x7df, Data: reqData, Kind: canbus.SFF}
+// func can_dump(canbusSrc, canbusDst odb_handler.CanbusHandler, sendPids bool, exit chan string) {
 
-		canbusSrc.Send(request)
-	*/
+// 	// vital thse are closed sanely
+// 	defer canbusSrc.Close()
+// 	defer canbusDst.Close()
 
-	go func() {
+// 	err := canbusSrc.BindDefault()
 
-		for {
-			msg, err := canbusSrc.Recv()
-			if err != nil {
-				log.Print(err.Error())
-				if errors.Is(err, io.EOF) {
-					return
-				}
+// 	if err != nil {
+// 		log.Fatal(err.Error())
+// 	}
 
-			} else {
-				readChan <- msg
-			}
-		}
-	}()
+// 	err = canbusDst.BindDefault()
+// 	if err != nil {
+// 		log.Fatal(err.Error())
+// 	}
 
-	log.Print("canbus main loop starting ...")
+// 	myPIDhandler := odb_handler.PIDHandler{CbHandler: canbusSrc, SendPids: sendPids}
 
-	// important info
-	CriticalInfoRequestTicker := time.NewTicker(24 * time.Hour)
-	defer CriticalInfoRequestTicker.Stop()
+// 	readChan := make(chan canbus.Frame)
+// 	/*
+// 		// 2 len data bytes 1 mode 0xd vehicle rpm 5 bytes padding to 8
+// 		reqData := []byte{2, 1, 0xc, 0, 0, 0, 0, 0}
 
-	// less important
-	LessCriticalInfoRequestTicker := time.NewTicker(24 * time.Hour)
-	defer LessCriticalInfoRequestTicker.Stop()
+// 		// 2 len data bytes 1 mode 0x2f fuel level 5 bytes padding to 8
+// 		// reqData = []byte{2, 1, 0xd, 0, 0, 0, 0, 0}
 
-	pidSupportedTicker := time.NewTicker(2 * time.Second)
-	defer pidSupportedTicker.Stop()
+// 		// response is
+// 		// [src ID 7e8] [len] [mode | 0x40] [pid] [result]
 
-outerLoop:
-	for {
-		select {
-		case <-exit:
-			log.Print("can_dump exiting")
-			break outerLoop
-		case msg := <-readChan:
+// 		// RPM
+// 		request := canbus.Frame{ID: 0x7df, Data: reqData, Kind: canbus.SFF}
 
-			_, err := myPIDhandler.Parse(msg)
+// 		canbusSrc.Send(request)
+// 	*/
 
-			if err != nil {
-				log.Print(err.Error())
-				continue
-			}
+// 	go func() {
 
-			// send it to the archiver
-			if canbusDst.Send(msg) == nil {
-				frameBytes, _ := serialiseFrame(msg)
-				log.Print(hex.EncodeToString(frameBytes))
-			}
+// 		for {
+// 			msg, err := canbusSrc.Recv()
+// 			if err != nil {
+// 				log.Print(err.Error())
+// 				if errors.Is(err, io.EOF) {
+// 					return
+// 				}
 
-		case <-LessCriticalInfoRequestTicker.C:
+// 			} else {
+// 				readChan <- msg
+// 			}
+// 		}
+// 	}()
 
-			myPIDhandler.GetFuelLevel()
-			myPIDhandler.GetEngineRuntimeS()
+// 	log.Print("canbus main loop starting ...")
 
-		case <-CriticalInfoRequestTicker.C:
-			// send out requests
-			myPIDhandler.GetRPM()
-			myPIDhandler.GetSpeedKPH()
-			myPIDhandler.GetThrottlePos()
+// 	// important info
+// 	CriticalInfoRequestTicker := time.NewTicker(24 * time.Hour)
+// 	defer CriticalInfoRequestTicker.Stop()
 
-		case <-pidSupportedTicker.C:
+// 	// less important
+// 	LessCriticalInfoRequestTicker := time.NewTicker(24 * time.Hour)
+// 	defer LessCriticalInfoRequestTicker.Stop()
 
-			switch myPIDhandler.ScanStarted {
+// 	pidSupportedTicker := time.NewTicker(2 * time.Second)
+// 	defer pidSupportedTicker.Stop()
 
-			case odb_handler.NotStarted:
-				log.Printf("Starting PID Support Query")
-				// start the PID check
-				err = myPIDhandler.GetSupportedPID(0)
+// outerLoop:
+// 	for {
+// 		select {
+// 		case <-exit:
+// 			log.Print("can_dump exiting")
+// 			break outerLoop
+// 		case msg := <-readChan:
 
-				if err != nil {
-					log.Print(err.Error())
-				}
-			case odb_handler.Complete:
-				if myPIDhandler.SendPids {
+// 			_, err := myPIDhandler.Parse(msg)
 
-					log.Printf("Starting Data Query ticker")
-					CriticalInfoRequestTicker.Stop()
-					CriticalInfoRequestTicker = time.NewTicker(100 * time.Millisecond)
+// 			if err != nil {
+// 				log.Print(err.Error())
+// 				continue
+// 			}
 
-					LessCriticalInfoRequestTicker.Stop()
-					LessCriticalInfoRequestTicker = time.NewTicker(1 * time.Minute)
-				}
+// 			// send it to the archiver
+// 			if canbusDst.Send(msg) == nil {
+// 				frameBytes, _ := serialiseFrame(msg)
+// 				log.Print(hex.EncodeToString(frameBytes))
+// 			}
 
-				myPIDhandler.ScanStarted = odb_handler.Closed
+// 		case <-LessCriticalInfoRequestTicker.C:
 
-			case odb_handler.Ongoing:
-				log.Print("PID Support Query still ongoing")
+// 			myPIDhandler.GetFuelLevel()
+// 			myPIDhandler.GetEngineRuntimeS()
 
-			}
+// 		case <-CriticalInfoRequestTicker.C:
+// 			// send out requests
+// 			myPIDhandler.GetRPM()
+// 			myPIDhandler.GetSpeedKPH()
+// 			myPIDhandler.GetThrottlePos()
 
-		}
-	}
+// 		case <-pidSupportedTicker.C:
 
-}
+// 			switch myPIDhandler.ScanStarted {
+
+// 			case odb_handler.NotStarted:
+// 				log.Printf("Starting PID Support Query")
+// 				// start the PID check
+// 				err = myPIDhandler.GetSupportedPID(0)
+
+// 				if err != nil {
+// 					log.Print(err.Error())
+// 				}
+// 			case odb_handler.Complete:
+// 				if myPIDhandler.SendPids {
+
+// 					log.Printf("Starting Data Query ticker")
+// 					CriticalInfoRequestTicker.Stop()
+// 					CriticalInfoRequestTicker = time.NewTicker(100 * time.Millisecond)
+
+// 					LessCriticalInfoRequestTicker.Stop()
+// 					LessCriticalInfoRequestTicker = time.NewTicker(1 * time.Minute)
+// 				}
+
+// 				myPIDhandler.ScanStarted = odb_handler.Closed
+
+// 			case odb_handler.Ongoing:
+// 				log.Print("PID Support Query still ongoing")
+
+// 			}
+
+// 		}
+// 	}
+
+// }
