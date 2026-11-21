@@ -26,7 +26,7 @@ type Canbusnativearchive_Data struct {
 
 func New() (*Canbusnativearchive_Data, error) {
 
-	return &Canbusnativearchive_Data{archiveIndex: 0}, nil
+	return &Canbusnativearchive_Data{archiveIndex: 0, handle: nil, decoder: nil}, nil
 
 }
 
@@ -113,9 +113,14 @@ func (cs *Canbusnativearchive_Data) Bind(name string) error {
 
 func (cs *Canbusnativearchive_Data) Close() {
 	cs.handle.Close()
+	cs.handle = nil
 }
 
 func (cs *Canbusnativearchive_Data) Recv() (canbus.Frame, error) {
+
+	if cs.handle == nil {
+		return canbus.Frame{}, errors.New("archive not bound")
+	}
 
 	tsf := canbus_archiver.TimeStampedFrame{}
 

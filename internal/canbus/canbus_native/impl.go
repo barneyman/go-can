@@ -10,13 +10,14 @@ import (
 
 type CanbusnativeData struct {
 	sock       *canbus.Socket
+	bound      bool
 	listenOnly bool
 }
 
 func New() (*CanbusnativeData, error) {
 	sock, err := canbus.New()
 
-	cs := CanbusnativeData{sock: sock, listenOnly: false}
+	cs := CanbusnativeData{sock: sock, listenOnly: false, bound: false}
 
 	return &cs, err
 
@@ -37,8 +38,11 @@ func (cs *CanbusnativeData) Bind(name string) error {
 	if cs.sock == nil {
 		return errors.New("CanbusnativeData sock not valid")
 	}
-
-	return cs.sock.Bind(name)
+	err := cs.sock.Bind(name)
+	if err == nil {
+		cs.bound = true
+	}
+	return err
 }
 
 func (cs CanbusnativeData) Close() {
@@ -47,6 +51,9 @@ func (cs CanbusnativeData) Close() {
 
 func (cs CanbusnativeData) Recv() (canbus.Frame, error) {
 
+	if !cs.bound {
+		return canbus.Frame{}, errors.New("cannot recv from unbound native")
+	}
 	if cs.sock != nil {
 		return cs.sock.Recv()
 	}
@@ -57,6 +64,9 @@ func (cs CanbusnativeData) Recv() (canbus.Frame, error) {
 
 func (cs *CanbusnativeData) Send(msg canbus.Frame) error {
 
+	if !cs.bound {
+		return errors.New("cannot send to unbound native")
+	}
 	if cs.listenOnly {
 		return errors.New("cannot send in listen-only mode")
 	}
@@ -73,9 +83,11 @@ func (cs *CanbusnativeData) Send(msg canbus.Frame) error {
 // =====================================================================
 
 type canbusnativeVirtual struct {
+	// inherit native
 	CanbusnativeData
 }
 
+// with overrides
 func (cs *canbusnativeVirtual) BindDefault() error {
 
 	return cs.Bind("vcan0")

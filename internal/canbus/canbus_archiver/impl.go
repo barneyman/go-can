@@ -104,6 +104,10 @@ func DecodeHexBytesToFrame(hexBytes []byte, data any) error {
 
 func (cs *Canbusnativearchiver_Data) Send(msg canbus.Frame) error {
 
+	if cs.handle == nil {
+		return errors.New("archive not bound")
+	}
+
 	thisOffset := time.Since(cs.lastSend)
 
 	tsf := TimeStampedFrame{Offset: thisOffset, Frame: msg}
