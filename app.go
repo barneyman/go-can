@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
+	"os"
 	"sync"
+	"time"
 
 	"go-can/internal/canbus"
 	odb_handler "go-can/internal/canbus/PIDhandler"
@@ -24,14 +27,58 @@ func NewApp() *App {
 func (app *App) Init() error {
 
 	// use some criteria to decide what power handling we are going to use
-	// currently rpicarpihat
-	app.power = Power.NewNormalPower()
-	app.power.Init()
+	if os.Getenv("POWER") == "rpi" {
+		app.power = Power.NewRPICarPiHatPower(time.Second*10, time.Minute)
+	} else {
+		app.power = Power.NewNormalPower()
+	}
+
+	err := app.power.Init()
+	if err != nil {
+		return err
+	}
 
 	// then work out what canbus src & dst we are going to use
 	app.canbus = canbus.NewCanbusMonitor()
 
-	app.canbus.Init(canbus.CbmSrcVirtual, canbus.CbmDstarchive, nil, nil)
+	canbussrcType := canbus.UnknownSrc
+	canbusdstType := canbus.UnknownDst
+
+	namedDst := os.Getenv("CANDEST")
+
+	switch namedDst {
+	case "archive":
+		canbusdstType = canbus.CbmDstarchive
+	case "null":
+		canbusdstType = canbus.CbmDstNull
+	default:
+		return errors.New("no CANDEST requested")
+	}
+
+	namedSrc := os.Getenv("CANSRC")
+
+	// listenOnly := false
+	// if os.Getenv("LISTEN_ONLY") != "" {
+	// 	listenOnly = true
+	// }
+
+	switch namedSrc {
+	case "native":
+		canbussrcType = canbus.CbmSrcNamedSource
+	case "archive":
+		canbussrcType = canbus.CbmSrcarchive
+	case "test":
+		canbussrcType = canbus.CbmSrcTest
+	case "vcan":
+		canbussrcType = canbus.CbmSrcVirtual
+	default:
+		return errors.New("no CANSRC requested")
+	}
+
+	err = app.canbus.Init(canbussrcType, canbusdstType, nil, nil)
+	if err != nil {
+		return err
+	}
 
 	// then create a pidhandler, and give it the canbus source and destination
 	app.pidHandler = odb_handler.NewPIDHandler()

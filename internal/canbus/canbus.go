@@ -8,6 +8,7 @@ import (
 	"go-can/internal/canbus/canbus_native"
 	"go-can/internal/canbus/canbus_null"
 	"go-can/internal/canbus/canbus_test"
+	"io"
 	"sync"
 	"time"
 
@@ -17,14 +18,16 @@ import (
 )
 
 const (
-	CbmSrcNamedSource = iota
+	UnknownSrc = iota
+	CbmSrcNamedSource
 	CbmSrcarchive
 	CbmSrcTest
 	CbmSrcVirtual
 )
 
 const (
-	CbmDstarchive = iota
+	UnknownDst = iota
+	CbmDstarchive
 	CbmDstNull
 )
 
@@ -112,6 +115,10 @@ func (cbm *CanbusMonitor) Run(ctx context.Context, wg *sync.WaitGroup) {
 			if forcedClose {
 				log.Print("Sockercan closed underneath me to force an exit")
 				running = false
+			} else if errors.Is(err, io.EOF) {
+				log.Print("Reached end of canbussrc")
+				running = false
+
 			} else {
 				log.Print(err.Error())
 			}

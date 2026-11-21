@@ -1,6 +1,8 @@
 package canbus_null
 
 import (
+	"log"
+
 	"github.com/go-daq/canbus"
 )
 
@@ -41,7 +43,7 @@ func (cs CanbusnullData) Recv() (canbus.Frame, error) {
 }
 
 func (cs *CanbusnullData) Send(msg canbus.Frame) error {
-
+	log.Print("Send not implemented in null")
 	return nil
 
 }

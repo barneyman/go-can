@@ -2,6 +2,7 @@ package Power
 
 import (
 	"context"
+	"errors"
 	"log"
 	"sync"
 	"time"
@@ -19,24 +20,24 @@ type RPICarPiHatPower struct {
 	exitPower          chan bool
 }
 
-func NewRPICarPiHatPower() *RPICarPiHatPower {
-	return &RPICarPiHatPower{}
+func NewRPICarPiHatPower(graceShutdown, ignCheckTimout time.Duration) *RPICarPiHatPower {
+	return &RPICarPiHatPower{
+		ignCheckTimeout:    ignCheckTimout,
+		graceShutdownTimer: graceShutdown,
+	}
 }
 
 func (rm *RPICarPiHatPower) GetExitPowerChannel() chan bool {
 	return rm.exitPower
 }
 
-func (rm *RPICarPiHatPower) Init(graceShutdown, ignCheckTimout time.Duration) error {
+func (rm *RPICarPiHatPower) Init() error {
 	// initialize the power monitor
 	err := rpio.Open()
 	if err != nil {
 		return err
 	}
 	rm.exitPower = make(chan bool)
-
-	rm.ignCheckTimeout = ignCheckTimout
-	rm.graceShutdownTimer = graceShutdown
 
 	// the pins we use
 	rm.ignitionPin = rpio.Pin(12)
@@ -51,6 +52,11 @@ func (rm *RPICarPiHatPower) Init(graceShutdown, ignCheckTimout time.Duration) er
 
 	// set the latch pin high to keep the power on
 	rm.latchPin.High()
+
+	// read ignition, if it's off we should fail, this is probably a bench test
+	if rm.ignitionPin.Read() != rpio.High {
+		return errors.New("ignition is off, expected it to be on")
+	}
 
 	return nil
 }

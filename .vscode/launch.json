@@ -43,7 +43,8 @@
             "mode": "auto",
             "program": "${workspaceFolder}",
             "env": {
-                "CANSRC": "native",
+                "POWER": "rpi",
+                "CANSRC": "vcan",
                 "CANDEST": "archive",
                 "SHUTDOWN": "YES"
             }
