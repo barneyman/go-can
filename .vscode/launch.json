@@ -45,6 +45,7 @@
             "env": {
                 "POWER": "rpi",
                 "CANSRC": "vcan",
+                "LISTEN_ONLY": "YES",
                 "CANDEST": "archive",
                 "SHUTDOWN": "YES"
             }

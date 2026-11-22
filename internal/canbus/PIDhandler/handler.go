@@ -36,6 +36,7 @@ type PIDHandler struct {
 	sendPids       bool
 	cb             *canbusmon.CanbusMonitor
 	pidDecoders    []PidResultDecoder
+	listenOnly     bool
 }
 
 type PIDresponse struct {
@@ -52,6 +53,8 @@ const OBD2_ID_MAX uint32 = 0x7E7
 const OBD2_ID_RESPONSE uint32 = 0x7E8
 const OBD2_ID_MAX_RESPONSE uint32 = 0x7EF
 
+const PID_WIDTH byte = 0x20
+
 // Flags
 const PID_RESPONSE_FLAG byte = 0x40
 
@@ -66,9 +69,10 @@ func NewPIDHandler() *PIDHandler {
 	return &PIDHandler{}
 }
 
-func (ph *PIDHandler) Init(cb *canbusmon.CanbusMonitor) error {
+func (ph *PIDHandler) Init(cb *canbusmon.CanbusMonitor, listenOnly bool) error {
 	// Initialize the PIDHandler with the canbus monitor
 	ph.cb = cb
+	ph.listenOnly = listenOnly
 	ph.pidDecoders = PidDefaultDecoders
 	return nil
 }
@@ -76,12 +80,17 @@ func (ph *PIDHandler) Init(cb *canbusmon.CanbusMonitor) error {
 // launched as a go routine
 func (ph *PIDHandler) Run(ctx context.Context, wg *sync.WaitGroup) {
 
-	// add my interest
-	wg.Add(1)
-	defer wg.Done()
+	if ph.cb == nil {
+		log.Print("Canbus monitor not initialized")
+		return
+	}
 
 	// kick off the PID scanning process
-	go func() {
+	wg.Go(func() {
+		if ph.listenOnly {
+			return
+		}
+
 		ph.scanStarted = Ongoing
 
 		for supported := uint(0); supported < 8; supported++ {
@@ -102,7 +111,7 @@ func (ph *PIDHandler) Run(ctx context.Context, wg *sync.WaitGroup) {
 		}
 
 		ph.scanStarted = Complete
-	}()
+	})
 
 	for running := true; running; {
 		select {
@@ -142,7 +151,7 @@ func (ph *PIDHandler) ParseFrame(canbusFrame canbus.Frame) (bool, error) {
 	response := PIDresponse{respID: int(canbusFrame.ID), service: uint8(canbusFrame.Data[1] &^ PID_RESPONSE_FLAG), PID: int(canbusFrame.Data[2]), data: canbusFrame.Data[3:]}
 
 	// handle supported PID response
-	if canbusFrame.Data[2]%0x20 == 0 {
+	if canbusFrame.Data[2]%PID_WIDTH == 0 {
 		// this is a supported PID response
 		// populate the array
 		offset := 1 + (response.PID)
@@ -203,7 +212,7 @@ func (ph PIDHandler) GetPIDRequest(ArbitrationID uint16, Service uint8, PID uint
 	log.Printf("Build PIDRequest: ArbitrationID: %x Service: %d PID: %x\r", ArbitrationID, Service, PID)
 
 	// check
-	if ph.suppportedPIDs[PID] == Unsupported {
+	if ph.suppportedPIDs[PID] != Supported {
 		return canbus.Frame{}, errors.New("unsupported pid")
 	}
 
@@ -225,13 +234,6 @@ func (ph PIDHandler) GetPIDRequest(ArbitrationID uint16, Service uint8, PID uint
 
 func (ph *PIDHandler) GetSupportedPIDRequestFrame(startAt uint) (canbus.Frame, error) {
 
-	// if ph.SendPids == false {
-	// 	// just fake 'no PIDs supported' and stop the loop
-	// 	ph.ScanStarted = Complete
-	// 	log.Printf("Listening only, not sending PIDs\r")
-	// 	return nil
-	// }
-
 	log.Printf("Build GetSupportedPID %d\r", startAt)
 
 	// check startAt
@@ -239,7 +241,7 @@ func (ph *PIDHandler) GetSupportedPIDRequestFrame(startAt uint) (canbus.Frame, e
 		return canbus.Frame{}, errors.New("PID request too high")
 	}
 
-	return ph.GetOBD_PID_CurrentData(uint32(startAt*0x20), []byte{})
+	return ph.GetOBD_PID_CurrentData(uint32(byte(startAt)*PID_WIDTH), []byte{})
 }
 
 //////////////////////////////////////////////////////////////

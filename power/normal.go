@@ -27,10 +27,6 @@ func (rm *NormalPower) Init() error {
 
 func (rm NormalPower) Run(ctx context.Context, wg *sync.WaitGroup) {
 
-	// add my interest
-	wg.Add(1)
-	defer wg.Done()
-
 	shutdownTimer := time.NewTimer(time.Second * 60)
 
 	// monitor the power state and handle shutdown requests

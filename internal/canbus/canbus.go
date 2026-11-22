@@ -95,34 +95,35 @@ func (cbm *CanbusMonitor) Init(srcType, dstType int, srcMeta, dstMeta any) error
 // launched as a go routine
 func (cbm *CanbusMonitor) Run(ctx context.Context, wg *sync.WaitGroup) {
 
-	// add my interest
-	wg.Add(1)
-	defer wg.Done()
+	forcedClose := make(chan bool, 2)
 
-	forcedClose := false
-
-	go func() {
+	wg.Go(func() {
 		<-ctx.Done()
 		// barbaric but effective way to force the loop to exit
-		forcedClose = true
+		log.Print("Context done, forcing close of CanbusMonitor go func")
+		forcedClose <- true
 		cbm.canbussrc.Close()
 		cbm.canbusdst.Close()
-	}()
+
+	})
 
 	for running := true; running; {
+
 		msg, err := cbm.canbussrc.Recv()
 		if err != nil {
-			if forcedClose {
-				log.Print("Sockercan closed underneath me to force an exit")
-				running = false
-			} else if errors.Is(err, io.EOF) {
+			running = false
+			if errors.Is(err, io.EOF) {
 				log.Print("Reached end of canbussrc")
-				running = false
-
 			} else {
 				log.Print(err.Error())
 			}
-		} else {
+		}
+
+		select {
+		case <-forcedClose:
+			log.Print("Sockercan closed underneath me to force an exit")
+			running = false
+		default:
 			select {
 			case cbm.C <- msg:
 			case <-time.After(200 * time.Millisecond):

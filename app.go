@@ -28,7 +28,7 @@ func (app *App) Init() error {
 
 	// use some criteria to decide what power handling we are going to use
 	if os.Getenv("POWER") == "rpi" {
-		app.power = Power.NewRPICarPiHatPower(time.Second*10, time.Minute)
+		app.power = Power.NewRPICarPiHatPower(time.Minute, time.Second*5)
 	} else {
 		app.power = Power.NewNormalPower()
 	}
@@ -57,10 +57,10 @@ func (app *App) Init() error {
 
 	namedSrc := os.Getenv("CANSRC")
 
-	// listenOnly := false
-	// if os.Getenv("LISTEN_ONLY") != "" {
-	// 	listenOnly = true
-	// }
+	listenOnly := false
+	if os.Getenv("LISTEN_ONLY") != "" {
+		listenOnly = true
+	}
 
 	switch namedSrc {
 	case "native":
@@ -82,7 +82,7 @@ func (app *App) Init() error {
 
 	// then create a pidhandler, and give it the canbus source and destination
 	app.pidHandler = odb_handler.NewPIDHandler()
-	app.pidHandler.Init(app.canbus)
+	app.pidHandler.Init(app.canbus, listenOnly)
 
 	// should we spin on anything?
 
@@ -100,11 +100,17 @@ func (app *App) Run() error {
 	// and a wait group
 	wg := &sync.WaitGroup{}
 
-	go app.power.Run(ctx, wg)
+	wg.Go(func() {
+		app.power.Run(ctx, wg)
+	})
 
-	go app.canbus.Run(ctx, wg)
+	wg.Go(func() {
+		app.canbus.Run(ctx, wg)
+	})
 
-	go app.pidHandler.Run(ctx, wg)
+	wg.Go(func() {
+		app.pidHandler.Run(ctx, wg)
+	})
 
 	for running := true; running; {
 

@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/go:2-1.24-bookworm AS go
+FROM mcr.microsoft.com/devcontainers/go AS go
 
 
 # get is more appropriate for scripted use

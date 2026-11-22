@@ -45,8 +45,10 @@ func (cs *CanbusnativeData) Bind(name string) error {
 	return err
 }
 
-func (cs CanbusnativeData) Close() {
-	cs.sock.Close()
+func (cs *CanbusnativeData) Close() {
+	if cs.sock != nil {
+		cs.sock.Close()
+	}
 }
 
 func (cs CanbusnativeData) Recv() (canbus.Frame, error) {

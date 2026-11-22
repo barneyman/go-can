@@ -68,25 +68,24 @@ func (rm *RPICarPiHatPower) GetExitPower() chan bool {
 // this will be launched as a goroutine to monitor the power state and handle shutdown requests
 func (rm *RPICarPiHatPower) Run(ctx context.Context, wg *sync.WaitGroup) {
 
-	// add my interest
-	wg.Add(1)
-	defer wg.Done()
-
 	// we have to assume ignition was high recently, or we wouldn't have power, so we can start with that assumption
 	lastIgnitionState := true
 
 	ignStateChan := make(chan bool)
 
-	go func(context.Context) {
-		for {
+	wg.Go(func() {
+
+		for running := true; running; {
 			select {
 			case <-ctx.Done():
-				return
+				running = false
 			default:
 				// read the ignition pin
+				log.Print("Checking ignition state of pin ")
 				ignitionState := rm.ignitionPin.Read() == rpio.High
 
 				if ignitionState != lastIgnitionState {
+					log.Printf("Ignition state changed to: %v", ignitionState)
 					// ignition state changed
 					// send it down the channel
 					ignStateChan <- ignitionState
@@ -97,19 +96,20 @@ func (rm *RPICarPiHatPower) Run(ctx context.Context, wg *sync.WaitGroup) {
 			}
 
 		}
-	}(ctx)
+		log.Print("Ignition watch exiting")
+	})
 
 	withinShutdownGracePeriod := false
 	shutdownGraceTimer := time.NewTimer(time.Minute)
 	shutdownGraceTimer.Stop()
 
 	// monitor ignition state and handle shutdown grace periods
-	for {
+	for running := true; running; {
 
 		select {
 		case <-ctx.Done():
 			// TODO: we either exit cleanly or shutdown the underlying machine
-			return
+			running = false
 		case ignStateChangedTo := <-ignStateChan:
 			// what was seen
 			if ignStateChangedTo == false {
@@ -118,10 +118,9 @@ func (rm *RPICarPiHatPower) Run(ctx context.Context, wg *sync.WaitGroup) {
 					log.Fatal("shouldn't see it go to off while in grace period")
 				}
 				shutdownGraceTimer = time.NewTimer(rm.graceShutdownTimer)
+				log.Printf("Ignition turned off, starting shutdown grace period")
 			} else {
-				if !withinShutdownGracePeriod {
-					log.Fatal("shouldn't see it go to on while not in grace period")
-				}
+				log.Printf("Ignition turned back on, stopping shutdown grace period")
 				// stop any grace timer we have
 				withinShutdownGracePeriod = false
 				shutdownGraceTimer.Stop()
@@ -130,7 +129,9 @@ func (rm *RPICarPiHatPower) Run(ctx context.Context, wg *sync.WaitGroup) {
 			// grace has expired ... tell dad we WANT to turn the power off
 			// we will wait for the ctx before we actually exit, gives other processes
 			// to exit cleanly
+			log.Print("Shutdown grace period expired, requesting power off")
 			rm.GetExitPower() <- true
+			running = false
 		}
 	}
 	log.Print("RPICarPiHatPower.Run exiting")
