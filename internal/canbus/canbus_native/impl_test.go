@@ -1,6 +1,7 @@
 package canbus_native
 
 import (
+	"errors"
 	"net"
 	"testing"
 
@@ -61,6 +62,33 @@ func TestRecvFailsNotBound(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Expected error when receiving from unbound native")
 	}
+}
+
+func TestRecvTimesOut(t *testing.T) {
+	requireCANitf(t, "vcan0")
+	archive, err := New()
+	if err != nil {
+		t.Fatalf("Failed to create new native: %v", err)
+	}
+	err = archive.Bind("vcan0")
+	if err != nil {
+		t.Fatalf("Failed to bind default native: %v", err)
+	}
+
+	err = archive.SetRecvTimeout(1) // Set a short receive timeout for testing
+	if err != nil {
+		t.Fatalf("Failed to set receive timeout: %v", err)
+	}
+
+	_, err = archive.Recv()
+	if err != nil {
+		if errors.Is(err, canbus.ErrReceiveTimeout) {
+			t.Logf("Receive timed out as expected")
+		} else {
+			t.Fatalf("Expected receive to timeout on native, got: %v", err)
+		}
+	}
+	archive.Close()
 }
 
 func TestSendSucceeds(t *testing.T) {

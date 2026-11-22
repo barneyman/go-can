@@ -10,4 +10,4 @@ require (
 
 require golang.org/x/sys v0.13.0 // indirect
 
-replace github.com/go-daq/canbus => github.com/barneyman/canbus v0.0.0-20220907072616-a591e15016c6
+replace github.com/go-daq/canbus => github.com/barneyman/canbus v0.0.0-20261122070443-c9b7ba63e84f

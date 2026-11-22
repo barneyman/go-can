@@ -20,7 +20,7 @@
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	"features": {
 
-		"ghcr.io/devcontainers/features/docker-outside-of-docker:1":{"version": "latest"},
+		//"ghcr.io/devcontainers/features/docker-outside-of-docker:1":{"version": "latest"},
 	    "ghcr.io/devcontainers/features/python:1": {}
 
 	},
@@ -50,7 +50,13 @@
             "source":"${localEnv:HOME}/.gitconfig",
             "target":"${localEnv:HOME}/.gitconfig",
             "type":"bind"
-        }
+        },
+        // {
+        //     // expose the sibling canbus checkout in the dev container
+        //     "source":"${localWorkspaceFolder}/../canbus",
+        //     "target":"/workspaces/canbus",
+        //     "type":"bind"
+        // }
     ],
 
 
