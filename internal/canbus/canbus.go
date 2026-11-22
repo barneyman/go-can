@@ -8,7 +8,6 @@ import (
 	"go-can/internal/canbus/canbus_native"
 	"go-can/internal/canbus/canbus_null"
 	"go-can/internal/canbus/canbus_test"
-	"io"
 	"sync"
 	"time"
 
@@ -36,6 +35,7 @@ type CanbusHandler interface {
 	SetListenOnly(bool)
 	Bind(string) error
 	Close()
+	SetRecvTimeout(time.Duration) error
 	Recv() (canbus.Frame, error)
 	Send(canbus.Frame) error
 }
@@ -73,6 +73,8 @@ func (cbm *CanbusMonitor) Init(srcType, dstType int, srcMeta, dstMeta any) error
 	}
 
 	cbm.canbussrc.BindDefault()
+	// set recv timeout
+	cbm.canbussrc.SetRecvTimeout(200 * time.Millisecond)
 
 	switch dstType {
 	case CbmDstarchive:
@@ -95,45 +97,42 @@ func (cbm *CanbusMonitor) Init(srcType, dstType int, srcMeta, dstMeta any) error
 // launched as a go routine
 func (cbm *CanbusMonitor) Run(ctx context.Context, wg *sync.WaitGroup) {
 
-	forcedClose := make(chan bool, 2)
-
-	wg.Go(func() {
-		<-ctx.Done()
-		// barbaric but effective way to force the loop to exit
-		log.Print("Context done, forcing close of CanbusMonitor go func")
-		forcedClose <- true
-		cbm.canbussrc.Close()
-		cbm.canbusdst.Close()
-
-	})
-
 	for running := true; running; {
 
 		msg, err := cbm.canbussrc.Recv()
 		if err != nil {
-			running = false
-			if errors.Is(err, io.EOF) {
-				log.Print("Reached end of canbussrc")
-			} else {
-				log.Print(err.Error())
+			if err != canbus.ErrReceiveTimeout {
+				log.Print("Error receiving from canbussrc: ", err.Error())
+				running = false
+				// round again
+				continue
 			}
+			// ErrReceiveTimeout has to fall through to see the Done case in the select below
+			select {
+			case <-ctx.Done():
+				log.Print("Context done, exiting CanbusMonitor.Run")
+				running = false
+			}
+			continue
 		}
 
 		select {
-		case <-forcedClose:
-			log.Print("Sockercan closed underneath me to force an exit")
+		case <-ctx.Done():
+			log.Print("Context done, exiting CanbusMonitor.Run")
 			running = false
+			continue
+		case cbm.C <- msg:
+		case <-time.After(200 * time.Millisecond):
+			log.Print("Timed-out sending frame through channel")
 		default:
-			select {
-			case cbm.C <- msg:
-			case <-time.After(200 * time.Millisecond):
-				log.Print("Timed-out sending frame through channel")
-			}
-			cbm.canbusdst.Send(msg)
-		}
 
-		//}
+		}
+		cbm.canbusdst.Send(msg)
+
 	}
+
+	cbm.canbussrc.Close()
+	cbm.canbusdst.Close()
 
 	log.Print("CanbusMonitor.Run exiting")
 

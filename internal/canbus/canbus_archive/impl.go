@@ -116,6 +116,11 @@ func (cs *Canbusnativearchive_Data) Close() {
 	cs.handle = nil
 }
 
+func (cs *Canbusnativearchive_Data) SetRecvTimeout(d time.Duration) error {
+	// do nothing, this is a read-only archive
+	return nil
+}
+
 func (cs *Canbusnativearchive_Data) Recv() (canbus.Frame, error) {
 
 	if cs.handle == nil {

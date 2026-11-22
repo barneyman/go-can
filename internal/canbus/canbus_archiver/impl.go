@@ -64,6 +64,11 @@ func (cs *Canbusnativearchiver_Data) Close() {
 	cs.handle.Close()
 }
 
+func (cs *Canbusnativearchiver_Data) SetRecvTimeout(d time.Duration) error {
+	// do nothing, this is a write-only archive
+	return nil
+}
+
 func (cs *Canbusnativearchiver_Data) Recv() (canbus.Frame, error) {
 	return canbus.Frame{}, errors.New("not implemented")
 }

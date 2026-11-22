@@ -2,6 +2,9 @@ package canbus_native
 
 import (
 	"errors"
+	"log"
+	"syscall"
+	"time"
 
 	"github.com/go-daq/canbus"
 )
@@ -51,16 +54,31 @@ func (cs *CanbusnativeData) Close() {
 	}
 }
 
+func (cs *CanbusnativeData) SetRecvTimeout(d time.Duration) error {
+	if cs.sock == nil {
+		return errors.New("CanbusnativeData sock not valid")
+	}
+	return cs.sock.SetRecvTimeout(d)
+}
+
 func (cs CanbusnativeData) Recv() (canbus.Frame, error) {
 
 	if !cs.bound {
 		return canbus.Frame{}, errors.New("cannot recv from unbound native")
 	}
 	if cs.sock != nil {
-		return cs.sock.Recv()
+		frame, err := cs.sock.Recv()
+		if err != nil {
+			if errors.Is(err, syscall.EAGAIN) {
+				// it's a recv timeout, play nice
+				return canbus.Frame{}, canbus.ErrReceiveTimeout
+			}
+			log.Print("Error receiving from native socket: ", err.Error())
+		}
+		return frame, err
 	}
 
-	return canbus.Frame{}, errors.New("cannot recv")
+	return canbus.Frame{}, errors.New("cannot recv, no socket")
 
 }
 

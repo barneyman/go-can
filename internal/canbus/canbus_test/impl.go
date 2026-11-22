@@ -36,6 +36,11 @@ func (cs Canbusnativetest_Data) Bind(name string) error {
 func (cs Canbusnativetest_Data) Close() {
 }
 
+func (cs *Canbusnativetest_Data) SetRecvTimeout(d time.Duration) error {
+	// do nothing, this is a test archive
+	return nil
+}
+
 func (cs *Canbusnativetest_Data) Recv() (canbus.Frame, error) {
 
 	// random buffer

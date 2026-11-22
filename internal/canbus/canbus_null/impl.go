@@ -2,6 +2,7 @@ package canbus_null
 
 import (
 	"log"
+	"time"
 
 	"github.com/go-daq/canbus"
 )
@@ -34,6 +35,11 @@ func (cs CanbusnullData) Bind(name string) error {
 
 func (cs CanbusnullData) Close() {
 
+}
+
+func (cs *CanbusnullData) SetRecvTimeout(d time.Duration) error {
+	// do nothing, this is a null interface
+	return nil
 }
 
 func (cs CanbusnullData) Recv() (canbus.Frame, error) {
