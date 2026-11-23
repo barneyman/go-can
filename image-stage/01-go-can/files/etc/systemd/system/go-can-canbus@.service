@@ -1,0 +1,12 @@
+[Unit]
+Description=Configure CAN bus %I
+Before=go-can.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/ip link set %i type can bitrate 500000
+ExecStart=/usr/sbin/ip link set %i up
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

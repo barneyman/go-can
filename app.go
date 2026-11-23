@@ -112,18 +112,8 @@ func (app *App) Run() error {
 		app.pidHandler.Run(ctx, wg)
 	})
 
-	for running := true; running; {
-
-		select {
-		case <-app.power.GetExitPowerChannel():
-			// handle power exit request
-			running = false
-		default:
-			// do nothing, just continue looping
-
-		}
-
-	}
+	// wait ...
+	<-app.power.GetExitPowerChannel():
 	log.Print("App.Run exiting - calling Cancel")
 	// fire the cancel
 	cancel()

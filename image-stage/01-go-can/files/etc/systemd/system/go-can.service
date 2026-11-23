@@ -1,0 +1,24 @@
+[Unit]
+Description=go-can CAN monitor
+Requires=go-can-canbus@can0.service
+After=go-can-canbus@can0.service
+
+[Service]
+Type=simple
+User=go-can
+Group=go-can
+WorkingDirectory=/var/lib/go-can
+StateDirectory=go-can
+StateDirectoryMode=0750
+Environment=CANSRC=native
+Environment=CANDEST=archive
+Environment=POWER=normal
+ExecStart=/usr/local/bin/go-can
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+NoNewPrivileges=true
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

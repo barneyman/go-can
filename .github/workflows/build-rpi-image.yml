@@ -1,0 +1,48 @@
+name: Build Raspberry Pi image
+
+on:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  build-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Test Go project
+        run: go test ./...
+
+      - name: Build ARM64 binary
+        run: |
+          mkdir -p image-stage/01-go-can/files/usr/local/bin
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
+            -trimpath -ldflags="-s -w" \
+            -o image-stage/01-go-can/files/usr/local/bin/go-can .
+
+      - name: Build Debian image
+        id: image
+        uses: usimd/pi-gen-action@v2
+        with:
+          image-name: go-can
+          release: trixie
+          stage-list: stage0 stage1 stage2 ./image-stage
+          enable-cloud-init: 0
+          enable-ssh: 0
+          increase-runner-disk-size: true
+
+      - name: Upload image
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-can-rpi-image
+          path: ${{ steps.image.outputs.image-path }}
+          if-no-files-found: error
+          retention-days: 14

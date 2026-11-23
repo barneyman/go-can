@@ -12,6 +12,17 @@ sudo ip link set up can0
 
 In this code, choose `Launch Package - run on bench` run configuration
 
+## Raspberry Pi image
+
+The `Build Raspberry Pi image` GitHub Actions workflow builds a minimal ARM64
+Raspberry Pi OS (Debian trixie) image on every push. Download the
+`go-can-rpi-image` artifact from the workflow run. The image enables the
+`go-can` systemd service at boot and configures `can0` for 500 kbit/s.
+
+The CAN controller must be enabled in the Pi's device-tree/boot configuration
+so that the `can0` interface exists. The service runs as the `go-can` user and
+stores CAN archives under `/var/lib/go-can/data`.
+
 ### cangen 
 
 ```

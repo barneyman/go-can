@@ -21,7 +21,9 @@
 	"features": {
 
 		//"ghcr.io/devcontainers/features/docker-outside-of-docker:1":{"version": "latest"},
-	    "ghcr.io/devcontainers/features/python:1": {}
+		"ghcr.io/devcontainers/features/python:1": {},
+		"ghcr.io/dhoeric/features/act:1": {},
+		"ghcr.io/postfinance/devcontainer-features/docker-out:1": {}
 
 	},
 
