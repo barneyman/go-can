@@ -18,9 +18,6 @@ jobs:
         with:
           go-version-file: go.mod
 
-      # - name: Test Go project
-      #   run: go test ./...
-
       - name: Build ARM64 binary
         run: |
           mkdir -p image-stage/01-go-can/files/usr/local/bin
