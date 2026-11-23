@@ -113,7 +113,8 @@ func (app *App) Run() error {
 	})
 
 	// wait ...
-	<-app.power.GetExitPowerChannel():
+	<-app.power.GetExitPowerChannel()
+
 	log.Print("App.Run exiting - calling Cancel")
 	// fire the cancel
 	cancel()
