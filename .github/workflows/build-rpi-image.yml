@@ -30,11 +30,15 @@ jobs:
         uses: usimd/pi-gen-action@v2
         with:
           image-name: go-can
+          enable-pigen-cache: true
           release: trixie
           stage-list: stage0 stage1 stage2 ./image-stage
           enable-cloud-init: 0
           enable-ssh: 0
           increase-runner-disk-size: true
+          # sparse file support
+          compression: xz        # Produces .img.xz
+          compression-level: 6
 
       - name: Upload image
         uses: actions/upload-artifact@v4
